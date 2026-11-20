@@ -4,16 +4,27 @@ name: Build unsigned hidden-backup IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      build_mode:
+        description: Build and test mode
+        required: true
+        default: ipa_only
+        type: choice
+        options:
+          - ipa_only
+          - fast
+          - full
 
 permissions:
   contents: read
 
 jobs:
   build-ipa:
-    name: Release / iphoneos / arm64
+    name: Release / iphoneos / arm64 (${{ inputs.build_mode }})
     runs-on: macos-26
     timeout-minutes: 90
     env:
+      BUILD_MODE: ${{ inputs.build_mode }}
       PROJECT: Watermelon.xcodeproj
       SCHEME: Watermelon
       DERIVED_DATA: build/DerivedData
@@ -31,11 +42,28 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
+      - name: Restore Swift package cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-26.2-spm-${{ hashFiles('Watermelon.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      - name: Restore DerivedData cache
+        uses: actions/cache@v4
+        with:
+          path: build/DerivedData
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-26.2-derived-${{ hashFiles('Watermelon.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ inputs.build_mode }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-xcode-26.2-derived-${{ hashFiles('Watermelon.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ inputs.build_mode }}-
+
       - name: Record source revision
         run: |
           mkdir -p "$LOG_DIR"
           git rev-parse HEAD | tee "$LOG_DIR/commit-sha.txt"
           git status --short | tee "$LOG_DIR/git-status.txt"
+          echo "$BUILD_MODE" | tee "$LOG_DIR/build-mode.txt"
 
       - name: Resolve Swift packages
         run: |
@@ -47,24 +75,53 @@ jobs:
             -clonedSourcePackagesDirPath "$PACKAGES" \
             2>&1 | tee "$LOG_DIR/package-resolution.log"
 
-      - name: Run iOS unit tests
+      - name: Run required iOS tests
+        if: env.BUILD_MODE != 'ipa_only'
         run: |
           set -o pipefail
           SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ { print $2; exit }')"
           test -n "$SIMULATOR_UDID"
+
+          TEST_SELECTION=()
+          if [[ "$BUILD_MODE" == "fast" ]]; then
+            TEST_SCOPE='Targeted Hidden PhotoKit/source/scope/backup safety regression tests only; this is not the full WatermelonTests suite.'
+            TEST_SELECTION+=(
+              '-only-testing:WatermelonTests/LocalDataSourceTests'
+              '-only-testing:WatermelonTests/LocalLibraryMediaFilterTests'
+              '-only-testing:WatermelonTests/LocalMediaSourceTests'
+              '-only-testing:WatermelonTests/ScopeControllerTests'
+              '-only-testing:WatermelonTests/ScopeNormalizerTests'
+              '-only-testing:WatermelonTests/BackgroundBackupDataSourceTests'
+              '-only-testing:WatermelonTests/WorkerTests'
+            )
+          else
+            TEST_SCOPE='Complete WatermelonTests suite.'
+          fi
+          echo "$TEST_SCOPE" | tee "$LOG_DIR/test-scope.txt"
+
           xcodebuild test \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -clonedSourcePackagesDirPath "$PACKAGES" \
-            -derivedDataPath build/TestDerivedData \
+            -derivedDataPath "$DERIVED_DATA" \
+            -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
+            "${TEST_SELECTION[@]}" \
             2>&1 | tee "$LOG_DIR/unit-tests.log"
+
+      - name: Record skipped test scope
+        if: env.BUILD_MODE == 'ipa_only'
+        run: |
+          echo 'IPA-only mode: all XCTest and simulator tests were intentionally skipped.' | tee "$LOG_DIR/test-scope.txt"
 
       - name: Build unsigned iOS app
         run: |
           set -o pipefail
+          # Cached intermediates may accelerate compilation, but the deliverable
+          # itself must always be recreated from this checkout.
+          rm -rf "$DERIVED_DATA/Build/Products/Release-iphoneos" build/package "build/$IPA_NAME"
           xcodebuild build \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
@@ -73,6 +130,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath "$DERIVED_DATA" \
             -clonedSourcePackagesDirPath "$PACKAGES" \
+            -disableAutomaticPackageResolution \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -112,6 +170,7 @@ jobs:
           shasum -a 256 "build/$IPA_NAME" | tee "$LOG_DIR/ipa-sha256.txt"
           stat -f '%z bytes' "build/$IPA_NAME" | tee "$LOG_DIR/ipa-size.txt"
           {
+            echo "Build mode: $BUILD_MODE"
             echo "Bundle ID: $BUNDLE_ID"
             echo "Display name: $DISPLAY_NAME"
             echo "Executable: $EXECUTABLE"
@@ -131,7 +190,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Watermelon-HiddenBackup-build-logs
+          name: Watermelon-HiddenBackup-build-logs-${{ inputs.build_mode }}
           path: build/logs
           if-no-files-found: warn
           retention-days: 14
