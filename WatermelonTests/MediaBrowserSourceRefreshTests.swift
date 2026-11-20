@@ -259,10 +259,10 @@ final class MediaBrowserSourceRefreshTests: XCTestCase {
             let mutation = lock.withLock { self.mutation }
             switch mutation {
             case .commit:
-                let size = lock.withLock { size += 1; return size }
+                let size = lock.withLock { self.size += 1; return self.size }
                 commit(fileSize: size)
             case .profile:
-                let key = lock.withLock { key += "-other"; return key }
+                let key = lock.withLock { self.key += "-other"; return self.key }
                 cache.setProfileKey(key)
             case .local:
                 seedChanges.publish()
