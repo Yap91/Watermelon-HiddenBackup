@@ -11,7 +11,7 @@ final class TransferLocalMediaSource: MediaBrowserSource, @unchecked Sendable {
 
     init(
         photoLibraryService: PhotoLibraryService,
-        query: PhotoLibraryQuery = .library(.all),
+        query: PhotoLibraryQuery,
         albumNames: [String: String] = [:],
         onDataSourceError: (@MainActor @Sendable (LocalDataSourceError) -> Void)? = nil
     ) {

@@ -39,6 +39,7 @@ final class LocalMediaSourceTests: XCTestCase {
             photoLibraryService: dependencies.photoLibraryService,
             hashIndexRepository: dependencies.hashIndexRepository,
             presenceIndex: presence,
+            query: .library(.all),
             fileSizeLoader: { await loader.load($0) }
         )
         guard case .loaded(let months) = await source.load(),

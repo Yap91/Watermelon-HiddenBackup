@@ -455,7 +455,8 @@ final class RemoteIndexCommitTests: XCTestCase {
         let presence = LibraryPresenceIndex(hashIndexRepository: dependencies.hashIndexRepository,
             coordinator: coordinator, profileKey: { "owner" }, homeLocalSeedProvider: { seed })
         let source = LocalMediaSource(photoLibraryService: dependencies.photoLibraryService,
-            hashIndexRepository: dependencies.hashIndexRepository, presenceIndex: presence, fileSizeLoader: { _ in [:] })
+            hashIndexRepository: dependencies.hashIndexRepository, presenceIndex: presence,
+            query: .library(.all), fileSizeLoader: { _ in [:] })
         guard case .loaded(let content) = await source.load() else {
             return XCTFail("Remote repair must not block local browsing")
         }

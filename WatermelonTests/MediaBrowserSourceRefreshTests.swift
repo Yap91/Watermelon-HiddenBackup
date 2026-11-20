@@ -202,7 +202,8 @@ final class MediaBrowserSourceRefreshTests: XCTestCase {
                 coordinator: coordinator, profileKey: { input.profileKey },
                 homeLocalSeedProvider: { input.loadSeed() }, homeLocalSeedChanges: seedChanges)
             local = LocalMediaSource(photoLibraryService: dependencies.photoLibraryService,
-                hashIndexRepository: dependencies.hashIndexRepository, presenceIndex: presence, fileSizeLoader: { _ in [:] })
+                hashIndexRepository: dependencies.hashIndexRepository, presenceIndex: presence,
+                query: .library(.all), fileSizeLoader: { _ in [:] })
             remote = RemoteMediaSource(service: RemoteThumbnailService(storageClientFactory: dependencies.storageClientFactory,
                 presenceIndex: presence, profile: profile, password: ""))
         }

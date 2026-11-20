@@ -67,7 +67,8 @@ final class BackupCoordinator: Sendable {
         password: String,
         workerCountOverride: Int?,
         iCloudPhotoBackupMode: ICloudPhotoBackupMode,
-        monthGroupingTimeZone: MonthGroupingTimeZonePreference
+        monthGroupingTimeZone: MonthGroupingTimeZonePreference,
+        hiddenOnly: Bool = false
     ) async throws -> BackupExecutionResult {
         let request = BackupRunRequest(
             profile: profile,
@@ -75,6 +76,7 @@ final class BackupCoordinator: Sendable {
             onlyAssetLocalIdentifiers: localIdentifiers,
             workerCountOverride: workerCountOverride,
             iCloudPhotoBackupMode: iCloudPhotoBackupMode,
+            hiddenOnly: hiddenOnly,
             monthGroupingTimeZone: monthGroupingTimeZone
         )
         let eventStream = BackupEventStream()

@@ -37,3 +37,17 @@ enum HomeLocalLibraryScope: Hashable, Sendable {
         }
     }
 }
+
+struct HomeMediaBrowserScopeConfiguration: Equatable, Sendable {
+    let localQuery: PhotoLibraryQuery
+    let includesRemoteContent: Bool
+    let hiddenOnly: Bool
+
+    init(scope: HomeLocalLibraryScope) {
+        localQuery = scope.photoLibraryQuery
+        hiddenOnly = scope == .hidden
+        // A remote index is not scoped to the device's hidden smart album. Mixing it into this
+        // browser could surface ordinary remote photos while the UI still says Hidden Photos Only.
+        includesRemoteContent = !hiddenOnly
+    }
+}

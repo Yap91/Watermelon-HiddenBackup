@@ -207,7 +207,8 @@ final class MediaBrowserDropSelectionTests: XCTestCase {
                 localHashIndexBuildService: dependencies.localHashIndexBuildService,
                 allAccessibleAssetIDs: { [] },
                 presenceIndex: presence, appRuntimeFlags: dependencies.appRuntimeFlags, isTaskActive: { false },
-                iCloudPhotoBackupMode: { .disable }, monthGroupingTimeZone: { .frozenCurrent() }))
+                iCloudPhotoBackupMode: { .disable }, monthGroupingTimeZone: { .frozenCurrent() },
+                hiddenOnlyScope: { false }))
             library = MediaDropLocalLibraryController(photoLibraryService: dependencies.photoLibraryService,
                 initialMediaFilter: .all, makeAlbumBrowser: { _ in nil })
             let source = SelectionSource()

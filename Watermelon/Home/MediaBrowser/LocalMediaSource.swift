@@ -12,27 +12,34 @@ final class LocalMediaSource: MediaBrowserSource, @unchecked Sendable {
     private let presenceIndex: LibraryPresenceIndex
     // Which on-device assets this source browses.
     private let query: PhotoLibraryQuery
+    private let albumNames: [String: String]
+    private let onDataSourceError: (@MainActor @Sendable (LocalDataSourceError) -> Void)?
     private let fileSizeLoader: @Sendable (Set<String>) async -> [String: Int64]
 
     init(
         photoLibraryService: PhotoLibraryService,
         hashIndexRepository: ContentHashIndexRepository,
         presenceIndex: LibraryPresenceIndex,
-        query: PhotoLibraryQuery = .library(.all),
+        query: PhotoLibraryQuery,
+        albumNames: [String: String] = [:],
+        onDataSourceError: (@MainActor @Sendable (LocalDataSourceError) -> Void)? = nil,
         fileSizeLoader: @escaping @Sendable (Set<String>) async -> [String: Int64]
     ) {
         self.photoLibraryService = photoLibraryService
         self.hashIndexRepository = hashIndexRepository
         self.presenceIndex = presenceIndex
         self.query = query
+        self.albumNames = albumNames
+        self.onDataSourceError = onDataSourceError
         self.fileSizeLoader = fileSizeLoader
     }
 
     func load() async -> MediaBrowserLoadResult {
-        await load(includeFileSizes: false)
+        return await load(includeFileSizes: false)
     }
 
     func load(includeFileSizes: Bool) async -> MediaBrowserLoadResult {
+        if let failure = await validateSelection() { return failure }
         let presenceStartedAt = CFAbsoluteTimeGetCurrent()
         let profileKey = presenceIndex.browserLocalProjectionInput().profileKey
         let photoAuthorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -50,6 +57,26 @@ final class LocalMediaSource: MediaBrowserSource, @unchecked Sendable {
               PHPhotoLibrary.authorizationStatus(for: .readWrite) == photoAuthorization,
               monthGroupingTimeZone == .frozenCurrent() else { return .stale }
         return result
+    }
+
+    private func validateSelection() async -> MediaBrowserLoadResult? {
+        do {
+            switch query {
+            case .hidden:
+                try photoLibraryService.validateHiddenAlbumSelection()
+            case .albums(let ids):
+                try photoLibraryService.validateAlbumSelection(ids, names: albumNames)
+            case .library:
+                return nil
+            }
+            return nil
+        } catch let error as LocalDataSourceError {
+            guard !Task.isCancelled else { return .cancelled }
+            await onDataSourceError?(error)
+            return .loaded(MediaBrowserContent(sections: []))
+        } catch {
+            return .cancelled
+        }
     }
 
     @concurrent func loadLocalProjection(

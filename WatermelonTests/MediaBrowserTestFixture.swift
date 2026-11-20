@@ -31,7 +31,8 @@ final class MediaBrowserTestFixture<Source: MediaBrowserSource> {
             localHashIndexBuildService: dependencies.localHashIndexBuildService, allAccessibleAssetIDs: { [] },
             presenceIndex: presence, appRuntimeFlags: dependencies.appRuntimeFlags,
             isTaskActive: { [runtime = dependencies.appRuntimeFlags] in runtime.isExecuting },
-            iCloudPhotoBackupMode: { .disable }, monthGroupingTimeZone: { .frozenCurrent() }))
+            iCloudPhotoBackupMode: { .disable }, monthGroupingTimeZone: { .frozenCurrent() },
+            hiddenOnlyScope: { false }))
         var specs = [MediaBrowserGridViewController.ModeSpec(mode: source.mode, isAvailable: { true }, makeSource: { source })]
         if let remoteSource {
             specs.append(.init(mode: .remote, isAvailable: { true }, makeSource: { remoteSource }))

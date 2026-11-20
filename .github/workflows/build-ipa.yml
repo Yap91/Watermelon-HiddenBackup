@@ -47,7 +47,7 @@ jobs:
             -clonedSourcePackagesDirPath "$PACKAGES" \
             2>&1 | tee "$LOG_DIR/package-resolution.log"
 
-      - name: Run hidden-source unit tests
+      - name: Run iOS unit tests
         run: |
           set -o pipefail
           SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ { print $2; exit }')"
@@ -59,9 +59,8 @@ jobs:
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -clonedSourcePackagesDirPath "$PACKAGES" \
             -derivedDataPath build/TestDerivedData \
-            -only-testing:WatermelonTests/LocalDataSourceTests \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee "$LOG_DIR/hidden-source-tests.log"
+            2>&1 | tee "$LOG_DIR/unit-tests.log"
 
       - name: Build unsigned iOS app
         run: |

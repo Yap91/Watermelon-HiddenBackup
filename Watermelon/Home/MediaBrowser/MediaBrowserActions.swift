@@ -54,6 +54,8 @@ final class MediaBrowserActionRunner {
         // Inherited so an on-demand upload behaves exactly like a normal backup.
         let iCloudPhotoBackupMode: () -> ICloudPhotoBackupMode
         let monthGroupingTimeZone: () -> MonthGroupingTimeZonePreference
+        // Browser uploads must preserve the local source's fail-closed hidden constraint.
+        let hiddenOnlyScope: () -> Bool
     }
 
     private let env: Environment
@@ -527,7 +529,8 @@ final class MediaBrowserActionRunner {
                     [localID], profile: profile, password: password,
                     workerCountOverride: BackupWorkerCountResolver.workerCountOverride(for: profile),
                     iCloudPhotoBackupMode: self.env.iCloudPhotoBackupMode(),
-                    monthGroupingTimeZone: self.env.monthGroupingTimeZone()
+                    monthGroupingTimeZone: self.env.monthGroupingTimeZone(),
+                    hiddenOnly: self.env.hiddenOnlyScope()
                 )
                 hud.dismiss()
                 // Result counts can't tell "backed up" from "skipped": a `resources_reused` skip DID back the
@@ -957,7 +960,8 @@ final class MediaBrowserActionRunner {
                     Set(localIDs), profile: profile, password: password,
                     workerCountOverride: BackupWorkerCountResolver.workerCountOverride(for: profile),
                     iCloudPhotoBackupMode: self.env.iCloudPhotoBackupMode(),
-                    monthGroupingTimeZone: self.env.monthGroupingTimeZone()
+                    monthGroupingTimeZone: self.env.monthGroupingTimeZone(),
+                    hiddenOnly: self.env.hiddenOnlyScope()
                 )
                 hud.dismiss()
                 guard let backedUp = await self.backedUpCount(localIDs),

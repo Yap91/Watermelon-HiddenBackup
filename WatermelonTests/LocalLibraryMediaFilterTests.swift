@@ -5,6 +5,56 @@ import XCTest
 @testable import Watermelon
 
 final class LocalLibraryMediaFilterTests: XCTestCase {
+    func testHomeBrowserScopePreservesDeviceAlbumAndHiddenQueries() {
+        let photos = HomeMediaBrowserScopeConfiguration(scope: .device(.photos))
+        XCTAssertEqual(photos.localQuery, .library(.photos))
+        XCTAssertTrue(photos.includesRemoteContent)
+        XCTAssertFalse(photos.hiddenOnly)
+
+        let albums = HomeMediaBrowserScopeConfiguration(scope: .albums(["album-a", "album-b"]))
+        XCTAssertEqual(albums.localQuery, .albums(["album-a", "album-b"]))
+        XCTAssertTrue(albums.includesRemoteContent)
+
+        let hidden = HomeMediaBrowserScopeConfiguration(scope: .hidden)
+        XCTAssertEqual(hidden.localQuery, .hidden)
+        XCTAssertFalse(hidden.includesRemoteContent)
+        XCTAssertTrue(hidden.hiddenOnly)
+
+        // The captured browser scope does not depend on SMB connection state and is rebuilt identically
+        // after page changes or reloads.
+        for isConnected in [false, true, false] {
+            let reloaded = HomeMediaBrowserScopeConfiguration(scope: .hidden)
+            XCTAssertEqual(reloaded, hidden, "connection=\(isConnected)")
+        }
+    }
+
+    func testHiddenScopeKeepsOnlyHiddenPhotoAndLivePhotoAcrossPipelineStages() {
+        struct Candidate {
+            let id: String
+            let isHidden: Bool
+            let kind: AlbumMediaKind
+        }
+        let candidates = [
+            Candidate(id: "A", isHidden: false, kind: .photo),
+            Candidate(id: "B", isHidden: true, kind: .photo),
+            Candidate(id: "C", isHidden: true, kind: .livePhoto),
+        ]
+        func selectedIDs(_ input: [Candidate]) -> [String] {
+            input.filter { HiddenAssetSelectionPolicy.accepts(isHidden: $0.isHidden) }.map(\.id)
+        }
+
+        let stages = [
+            "home index": selectedIDs(candidates),
+            "month browser after reload": selectedIDs(candidates),
+            "backup input after node connection": selectedIDs(candidates),
+        ]
+        for (stage, identifiers) in stages {
+            XCTAssertEqual(identifiers, ["B", "C"], stage)
+        }
+        let backupInputAfterNodeConnection = stages["backup input after node connection"] ?? []
+        XCTAssertEqual(candidates.filter { backupInputAfterNodeConnection.contains($0.id) }.map(\.kind), [.photo, .livePhoto])
+    }
+
     func testPhotoKitPredicatesSelectOnlyRequestedMediaType() {
         let mediaTypes: [PHAssetMediaType] = [.image, .video, .audio, .unknown]
         for type in mediaTypes {

@@ -1437,6 +1437,7 @@ final class HomeViewController: UIViewController {
         // Read-only viewing — safe to open anytime (including while connecting / during backup). Remote
         // and merged tabs gate themselves on the live connection state.
         let dependencies = dependencies
+        let browserScope = HomeMediaBrowserScopeConfiguration(scope: store.localLibraryScope)
 
         let isConnected: () -> Bool = {
             dependencies.appSession.activeProfile != nil &&
@@ -1471,12 +1472,19 @@ final class HomeViewController: UIViewController {
             },
             homeLocalSeedChanges: store.dataManager.browserLocalSeedChanges
         )
-        func makeLocalSource(query: PhotoLibraryQuery = .library(.all)) -> LocalMediaSource {
+        func makeLocalSource(query: PhotoLibraryQuery) -> LocalMediaSource {
             LocalMediaSource(
                 photoLibraryService: dependencies.photoLibraryService,
                 hashIndexRepository: dependencies.hashIndexRepository,
                 presenceIndex: presenceIndex,
                 query: query,
+                onDataSourceError: { [weak self] error in
+                    guard let self else { return }
+                    let presenter = self.presentedViewController ?? self
+                    LocalAlbumSelectionPresentation.showError(error, from: presenter) { [weak self] in
+                        self?.openLocalAlbumPicker()
+                    }
+                },
                 fileSizeLoader: { [dataManager = store.dataManager] identifiers in
                     await dataManager.browserFileSizes(for: identifiers)
                 }
@@ -1505,13 +1513,13 @@ final class HomeViewController: UIViewController {
             })]
         } else if let album {
             specs = [.init(mode: .local, isAvailable: { true }, makeSource: { makeLocalSource(query: .albums([album.localIdentifier])) })]
-        } else {
+        } else if browserScope.includesRemoteContent {
             specs = [
-                .init(mode: .local, isAvailable: { true }, makeSource: { makeLocalSource() }),
+                .init(mode: .local, isAvailable: { true }, makeSource: { makeLocalSource(query: browserScope.localQuery) }),
                 .init(mode: .merged, isAvailable: isConnected, makeSource: {
-                    guard let service = makeRemoteService() else { return makeLocalSource() }
+                    guard let service = makeRemoteService() else { return makeLocalSource(query: browserScope.localQuery) }
                     return MergedMediaSource(
-                        localSource: makeLocalSource(),
+                        localSource: makeLocalSource(query: browserScope.localQuery),
                         remoteSource: RemoteMediaSource(service: service)
                     )
                 }),
@@ -1520,8 +1528,12 @@ final class HomeViewController: UIViewController {
                     return RemoteMediaSource(service: service)
                 }),
             ]
+        } else {
+            specs = [.init(mode: .local, isAvailable: { true }, makeSource: {
+                makeLocalSource(query: browserScope.localQuery)
+            })]
         }
-        let initialMode: MediaBrowserMode = (!transferMode && album == nil && initialRemote && isConnected()) ? .remote : .local
+        let initialMode: MediaBrowserMode = (!transferMode && album == nil && browserScope.includesRemoteContent && initialRemote && isConnected()) ? .remote : .local
 
         let actionRunner = MediaBrowserActionRunner(env: .init(
             appSession: dependencies.appSession,
@@ -1543,6 +1555,10 @@ final class HomeViewController: UIViewController {
             iCloudPhotoBackupMode: { ICloudPhotoBackupMode.getValue() },
             monthGroupingTimeZone: { [weak self] in
                 self?.store.dataManager.monthGroupingTimeZoneForLocalIndex() ?? .frozenCurrent()
+            },
+            hiddenOnlyScope: {
+                if let transferLocalLibrary { return transferLocalLibrary.scope == .hidden }
+                return album == nil && browserScope.hiddenOnly
             }
         ))
         let selectionAction: MediaBrowserGridViewController.SelectionAction? = transferMode
