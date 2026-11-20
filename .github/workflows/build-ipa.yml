@@ -1,5 +1,7 @@
 name: Build unsigned hidden-backup IPA
 
+# This workflow deliberately produces an unsigned Payload/Watermelon.app archive.
+
 on:
   workflow_dispatch:
 
