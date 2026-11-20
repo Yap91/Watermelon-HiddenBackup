@@ -38,7 +38,7 @@ final class AssetProcessor: Sendable {
         var context = context
         let refetchResult = PHAsset.fetchAssets(
             withLocalIdentifiers: [context.asset.localIdentifier],
-            options: PhotoLibraryService.makeAssetFetchOptions()
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: context.hiddenOnly)
         )
         guard refetchResult.count > 0 else {
             return AssetProcessResult(
@@ -55,6 +55,20 @@ final class AssetProcessor: Sendable {
             )
         }
         let refetchedAsset = refetchResult.object(at: 0)
+        guard !context.hiddenOnly || HiddenAssetSelectionPolicy.accepts(refetchedAsset) else {
+            return AssetProcessResult(
+                status: .skipped,
+                reason: "asset_no_longer_hidden",
+                displayName: BackupAssetResourcePlanner.assetDisplayName(
+                    asset: refetchedAsset,
+                    selectedResources: []
+                ),
+                assetFingerprint: nil,
+                timing: AssetProcessTiming(),
+                totalFileSizeBytes: 0,
+                uploadedFileSizeBytes: 0
+            )
+        }
         let refetchedResources = BackupAssetResourcePlanner.orderedResourcesWithRoleSlot(
             from: PHAssetResource.assetResources(for: refetchedAsset)
         )
@@ -120,7 +134,7 @@ final class AssetProcessor: Sendable {
             (role: $0.local.resourceRole, slot: $0.local.resourceSlot, contentHash: $0.contentHash)
         })
         if context.monthStore.containsAssetFingerprint(assetFingerprint), !context.monthStore.isAssetIncomplete(assetFingerprint) {
-            try assertAssetUnchanged(context.asset)
+            try assertAssetUnchanged(context.asset, hiddenOnly: context.hiddenOnly)
             try hashIndexRepository.upsertAssetHashSnapshot(assetLocalIdentifier: context.asset.localIdentifier,
                 assetFingerprint: assetFingerprint, resources: preparedResources.map {
                     .init(role: $0.local.resourceRole, slot: $0.local.resourceSlot, contentHash: $0.contentHash, fileSize: $0.fileSize)
@@ -430,8 +444,12 @@ final class AssetProcessor: Sendable {
         return Self.makeICloudDisabledSkipResult(context: context, displayName: displayName, timing: timing)
     }
 
-    private func assertAssetUnchanged(_ asset: PHAsset) throws {
-        guard let current = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: PhotoLibraryService.makeAssetFetchOptions()).firstObject,
+    private func assertAssetUnchanged(_ asset: PHAsset, hiddenOnly: Bool) throws {
+        guard let current = PHAsset.fetchAssets(
+            withLocalIdentifiers: [asset.localIdentifier],
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: hiddenOnly)
+        ).firstObject,
+              (!hiddenOnly || HiddenAssetSelectionPolicy.accepts(current)),
               current.modificationDate == asset.modificationDate else {
             try hashIndexRepository.deleteIndexEntries(assetIDs: [asset.localIdentifier])
             throw NSError(domain: PHPhotosErrorDomain, code: PHPhotosError.operationInterrupted.rawValue)
@@ -492,7 +510,7 @@ final class AssetProcessor: Sendable {
             }
             uploads.append((position + 1, prepared))
         }
-        try assertAssetUnchanged(context.asset)
+        try assertAssetUnchanged(context.asset, hiddenOnly: context.hiddenOnly)
 
         var uploadedBytes: Int64 = 0
         for (position, prepared) in uploads {
@@ -519,7 +537,7 @@ final class AssetProcessor: Sendable {
         try await RepoWriteGuard.assertOrdinaryWriteAllowed(context.writeMode)
         try cancellationController?.throwIfCancelled()
         try Task.checkCancellation()
-        try assertAssetUnchanged(context.asset)
+        try assertAssetUnchanged(context.asset, hiddenOnly: context.hiddenOnly)
         let updated = RemoteManifestAsset(year: remoteAsset.year, month: remoteAsset.month,
             assetFingerprint: fingerprint, creationDateMs: LibraryCreationDate.optionalMilliseconds(context.asset.creationDate),
             backedUpAtMs: Date().millisecondsSinceEpoch, resourceCount: links.count,

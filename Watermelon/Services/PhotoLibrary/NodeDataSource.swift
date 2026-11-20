@@ -70,11 +70,22 @@ extension DependencyContainer {
 extension PhotoLibraryService {
     func nodeDataSourceErrors(for profiles: [ServerProfileRecord]) -> [Int64: LocalDataSourceError] {
         let albumProfiles = profiles.filter { $0.defaultBackupDataSource().kind == .albums }
-        guard !albumProfiles.isEmpty else { return [:] }
+        let hiddenProfiles = profiles.filter { $0.defaultBackupDataSource().kind == .hidden }
+        guard !albumProfiles.isEmpty || !hiddenProfiles.isEmpty else { return [:] }
         let authorization = authorizationStatus()
         let allIDs = Set(albumProfiles.flatMap { $0.defaultBackupDataSource().albums.map(\.id) })
         let existing = authorization == .authorized ? existingUserAlbumIdentifiers(in: allIDs) : []
         var errors: [Int64: LocalDataSourceError] = [:]
+        for profile in hiddenProfiles {
+            guard let id = profile.id else { continue }
+            do {
+                try validateHiddenAlbumSelection()
+            } catch let error as LocalDataSourceError {
+                errors[id] = error
+            } catch {
+                errors[id] = .sourceUnavailable
+            }
+        }
         for profile in albumProfiles {
             guard let id = profile.id else { continue }
             let source = profile.defaultBackupDataSource()

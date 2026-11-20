@@ -121,6 +121,7 @@ final class BackupRunDriver {
                     onlyAssetLocalIdentifiers: mode.targetAssetIdentifiers,
                     workerCountOverride: capturedConfiguration.workerCountOverride,
                     iCloudPhotoBackupMode: capturedConfiguration.iCloudPhotoBackupMode,
+                    hiddenOnly: capturedConfiguration.hiddenOnly,
                     monthGroupingTimeZone: capturedConfiguration.monthGroupingTimeZone,
                     onMonthUploaded: onMonthUploaded,
                     terminationControl: terminationControl

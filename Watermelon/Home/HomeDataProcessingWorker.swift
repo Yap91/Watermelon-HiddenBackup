@@ -96,7 +96,9 @@ final class HomeDataProcessingWorker: @unchecked Sendable {
             guard status == .authorized || status == .limited else { return nil }
             let collections = photoLibraryService.fetchCollections(query: query)
             return LocalLibraryInput(collections: collections,
-                payload: LibraryInitialPayload(collections: collections.map { snapshots(of: $0.assets) }))
+                payload: LibraryInitialPayload(collections: collections.map {
+                    snapshots(of: $0.assets, requiringHiddenAssets: $0.source == .hidden)
+                }))
         }
     }
 
@@ -325,7 +327,9 @@ final class HomeDataProcessingWorker: @unchecked Sendable {
                     continuation.resume(returning: .failed(changedMonths: self.localIndexReadFailed(error)))
                     return
                 }
-                let fetchedAssets = self.photoLibraryService.fetchAssets(localIdentifiers: changedIDs)
+                let fetchedAssets = self.photoLibraryService.fetchAssets(localIdentifiers: changedIDs).filter {
+                    expectedScope != .hidden || HiddenAssetSelectionPolicy.accepts($0)
+                }
                 let fingerprints = self.currentFingerprints(records, assets: fetchedAssets)
                 let accessibleIDs = Set(fetchedAssets.map(\.localIdentifier))
                 let existingIDs = self.localIndex.knownAssetIDs(in: changedIDs)
@@ -341,7 +345,24 @@ final class HomeDataProcessingWorker: @unchecked Sendable {
 
                 var insertedCount = 0
                 // New assets have no inferred membership in a selected user album.
-                if let mediaFilter = expectedScope.deviceMediaFilter {
+                if expectedScope == .hidden {
+                    let missing = fetchedAssets.filter {
+                        !existingIDs.contains($0.localIdentifier) && HiddenAssetSelectionPolicy.accepts($0)
+                    }
+                    if !missing.isEmpty {
+                        let snapshots = Dictionary(uniqueKeysWithValues: missing.map { asset in
+                            (asset.localIdentifier, snapshot(asset))
+                        })
+                        let insertedMonths = self.localIndex.eagerlyInsert(
+                            snapshots,
+                            fingerprintsForIDs: { _ in fingerprints },
+                            remoteFingerprintsForMonth: self.remoteFingerprintsForMonth
+                        )
+                        changedMonths.formUnion(insertedMonths)
+                        membershipChangedMonths.formUnion(insertedMonths)
+                        insertedCount = snapshots.count
+                    }
+                } else if let mediaFilter = expectedScope.deviceMediaFilter {
                     let missingIDs = accessibleIDs.subtracting(existingIDs)
                     if !missingIDs.isEmpty {
                         let fetched = fetchedAssets.filter {
@@ -454,6 +475,7 @@ final class HomeDataProcessingWorker: @unchecked Sendable {
                 let fetchResult = collection.assets
                 guard let details = change.changeDetails(for: fetchResult) else { continue }
                 let nextFetchResult = details.fetchResultAfterChanges
+                let requiresHiddenAssets = collection.source == .hidden
                 if case .album = collection.source {
                     if !details.hasIncrementalChanges {
                         burstMembershipChanged = true
@@ -471,15 +493,25 @@ final class HomeDataProcessingWorker: @unchecked Sendable {
                         idxs.map { fetchResult.object(at: $0).localIdentifier }
                     } ?? []
                     let inserted = details.insertedIndexes.map { idxs in
-                        idxs.map { snapshot(nextFetchResult.object(at: $0)) }
+                        idxs.compactMap { index -> LibraryAssetSnapshot? in
+                            let asset = nextFetchResult.object(at: index)
+                            guard !requiresHiddenAssets || HiddenAssetSelectionPolicy.accepts(asset) else { return nil }
+                            return snapshot(asset)
+                        }
                     } ?? []
                     let changed = details.changedIndexes.map { idxs in
-                        idxs.map { snapshot(nextFetchResult.object(at: $0)) }
+                        idxs.compactMap { index -> LibraryAssetSnapshot? in
+                            let asset = nextFetchResult.object(at: index)
+                            guard !requiresHiddenAssets || HiddenAssetSelectionPolicy.accepts(asset) else { return nil }
+                            return snapshot(asset)
+                        }
                     } ?? []
                     var moved: [LibraryAssetSnapshot] = []
                     if details.hasMoves {
                         details.enumerateMoves { _, toIndex in
-                            moved.append(snapshot(nextFetchResult.object(at: toIndex)))
+                            let asset = nextFetchResult.object(at: toIndex)
+                            guard !requiresHiddenAssets || HiddenAssetSelectionPolicy.accepts(asset) else { return }
+                            moved.append(snapshot(asset))
                         }
                     }
                     for snapshot in inserted + changed + moved {
@@ -493,7 +525,10 @@ final class HomeDataProcessingWorker: @unchecked Sendable {
                         moved: moved
                     )
                 } else {
-                    let nextSnapshots = snapshots(of: nextFetchResult)
+                    let nextSnapshots = snapshots(
+                        of: nextFetchResult,
+                        requiringHiddenAssets: requiresHiddenAssets
+                    )
                     for snapshot in nextSnapshots {
                         candidateSnapshotsByID[snapshot.localIdentifier] = snapshot
                     }

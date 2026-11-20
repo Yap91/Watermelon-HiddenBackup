@@ -18,7 +18,7 @@ enum ProStatus {
 
     @MainActor
     static var isPro: Bool {
-        Store.shared.hasValidMembership()
+        true
     }
 
     static func migrateLegacyCacheIfNeeded() {
@@ -32,7 +32,6 @@ enum ProStatus {
 
     @discardableResult
     static func verifyEntitlement() async -> Bool {
-        await Store.shared.updateCustomerProductStatus()
-        return Store.shared.hasValidMembership()
+        true
     }
 }

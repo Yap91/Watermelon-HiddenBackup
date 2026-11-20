@@ -2043,6 +2043,8 @@ final class HomeViewController: UIViewController {
                 for: filter,
                 isPad: traitCollection.userInterfaceIdiom == .pad
             )
+        case .hidden:
+            return String(localized: "dataSource.hidden", defaultValue: "Hidden Photos Only")
         case .albums(let ids):
             if ids.count == 1, let id = ids.first, let descriptor = store.albumDisplayCache[id] {
                 return descriptor.title

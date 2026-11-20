@@ -330,7 +330,7 @@ final class InboxTransferService: @unchecked Sendable {
         guard !localIdentifiers.isEmpty else { return [] }
         let result = PHAsset.fetchAssets(
             withLocalIdentifiers: Array(localIdentifiers),
-            options: PhotoLibraryService.makeAssetFetchOptions()
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: true)
         )
         var details: [InboxTransferPhotoSelectionDetail] = []
         details.reserveCapacity(result.count)

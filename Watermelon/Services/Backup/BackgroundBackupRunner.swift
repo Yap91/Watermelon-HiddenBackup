@@ -10,7 +10,7 @@ import MoreKit
 import Photos
 
 final class BackgroundBackupRunner {
-    static let taskIdentifier = "com.zizicici.watermelon.background-backup"
+    static let taskIdentifier = "com.yap.watermelon.hiddenbackup.background-backup"
 
     static let flushInterval = 10
     private static let recentMonthCount = 2
@@ -32,7 +32,6 @@ final class BackgroundBackupRunner {
     }
 
     func run() async {
-        guard await ProStatus.verifyEntitlement() else { return }
         guard BackgroundBackupSetting.getValue() == .enable else { return }
 
         guard let preflightProfiles = try? databaseManager.fetchBackgroundBackupEnabledProfiles(),
@@ -131,11 +130,12 @@ final class BackgroundBackupRunner {
                 let result = try await backupProfile(
                     latestProfile,
                     writer: writer,
-                    monthAssetIDsCache: source.kind == .albums ? nil : monthAssetIDsCache,
+                    monthAssetIDsCache: source.kind == .albums || source.kind == .hidden ? nil : monthAssetIDsCache,
                     monthGroupingTimeZone: monthGroupingTimeZone,
                     monthScopeNow: monthScopeNow,
                     mediaFilter: source.kind.mediaFilter ?? .all,
-                    albumSelection: source.kind == .albums ? source.albums : nil
+                    albumSelection: source.kind == .albums ? source.albums : nil,
+                    hiddenOnly: source.kind == .hidden
                 )
                 try Task.checkCancellation()
                 markProfileCompleted(latestProfile)
@@ -219,6 +219,7 @@ final class BackgroundBackupRunner {
                 monthScope: monthScope,
                 mediaFilter: dataSource.kind.mediaFilter ?? .all,
                 albumSelection: dataSource.kind == .albums ? dataSource.albums : nil,
+                hiddenOnly: dataSource.kind == .hidden,
                 onEvent: onEvent
             )
             try Task.checkCancellation()
@@ -249,6 +250,7 @@ final class BackgroundBackupRunner {
         monthScope: BackupMonthScope = .recentMonths(2),
         mediaFilter: PhotoLibraryMediaFilter = .all,
         albumSelection: [LocalAlbumReference]? = nil,
+        hiddenOnly: Bool = false,
         onEvent: (@Sendable (BackupEvent) async -> Void)? = nil
     ) async throws -> BackupExecutionResult {
         try Task.checkCancellation()
@@ -333,6 +335,7 @@ final class BackgroundBackupRunner {
             monthScope: monthScope,
             mediaFilter: mediaFilter,
             albumSelection: albumSelection,
+            hiddenOnly: hiddenOnly,
             monthAssetIDsProvider: monthAssetIDsProvider,
             onRemoteIndexProgress: onRemoteIndexProgress,
             monthOrdering: .newestMonthFirst,

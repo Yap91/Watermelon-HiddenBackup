@@ -34,12 +34,6 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
         static let testCrash = "testCrash"
     }
 
-    private static let proBadge = MoreBadgeStyle(
-        text: "PRO",
-        textColor: .materialOnPrimary(dark: .Material.Green._800),
-        backgroundColor: .materialPrimary(light: .Material.Green._600, dark: .Material.Green._200)
-    )
-
     private let dependencies: DependencyContainer?
     private let permissions: PermissionSettings
     private let onProfilesChanged: (() -> Void)?
@@ -59,15 +53,8 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
 
     func sections(for controller: MoreViewController) -> [MoreSectionType] {
         let permissionValues = MainActor.assumeIsolated { (permissions.photosValue, permissions.notificationsValue) }
-        var sections: [MoreSectionType] = [.custom(MoreCustomSection(id: "pro", items: [
-            MoreCustomItem(
-                id: ItemID.pro,
-                title: WatermelonProBenefits.title,
-                value: MainActor.assumeIsolated { ProStatus.isPro }
-                    ? String(localized: "pro.entry.viewBenefits")
-                    : String(localized: "paywall.choosePlan")
-            )
-        ]))]
+        // Self-hosted fork: omit the paid membership entry from Settings.
+        var sections: [MoreSectionType] = []
 
         sections.append(.custom(MoreCustomSection(
             id: "general",
@@ -132,8 +119,7 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
                     MoreCustomItem(
                         id: ItemID.browserLinkRateLimit,
                         title: String(localized: "settings.browserLinkRateLimit.header"),
-                        value: BrowserLinkRateLimitSetting.getValue().getName(),
-                        badge: Self.proBadge
+                        value: BrowserLinkRateLimitSetting.getValue().getName()
                     )
                 ]
             )))
@@ -147,8 +133,7 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
                     MoreCustomItem(
                         id: ItemID.backgroundBackup,
                         title: String(localized: "more.item.backgroundBackup"),
-                        value: BackgroundBackupSetting.getValue().getName(),
-                        badge: Self.proBadge
+                        value: BackgroundBackupSetting.getValue().getName()
                     ),
                     MoreCustomItem(
                         id: ItemID.backgroundBackupNodes,
@@ -166,8 +151,7 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
                         MoreCustomItem(
                             id: ItemID.shortcuts,
                             title: ShortcutsSetting.getTitle(),
-                            value: ShortcutsSetting.displayValue,
-                            badge: Self.proBadge
+                            value: ShortcutsSetting.displayValue
                         )
                     ]
                 )))
@@ -178,8 +162,7 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
                 MoreCustomItem(
                     id: ItemID.pipProgress,
                     title: String(localized: "more.item.pipProgress"),
-                    value: PiPProgressSetting.getValue().getName(),
-                    badge: Self.proBadge
+                    value: PiPProgressSetting.getValue().getName()
                 )
             ]
             if isPiPProgressActive {

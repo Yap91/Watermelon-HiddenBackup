@@ -20,11 +20,16 @@ func snapshot(_ asset: PHAsset) -> LibraryAssetSnapshot {
     )
 }
 
-func snapshots(of fetchResult: PHFetchResult<PHAsset>) -> [LibraryAssetSnapshot] {
+func snapshots(
+    of fetchResult: PHFetchResult<PHAsset>,
+    requiringHiddenAssets: Bool = false
+) -> [LibraryAssetSnapshot] {
     var built: [LibraryAssetSnapshot] = []
     built.reserveCapacity(fetchResult.count)
     for index in 0 ..< fetchResult.count {
-        built.append(snapshot(fetchResult.object(at: index)))
+        let asset = fetchResult.object(at: index)
+        guard !requiringHiddenAssets || HiddenAssetSelectionPolicy.accepts(asset) else { continue }
+        built.append(snapshot(asset))
     }
     return built
 }

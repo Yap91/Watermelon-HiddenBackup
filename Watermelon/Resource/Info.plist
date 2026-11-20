@@ -4,7 +4,7 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.zizicici.watermelon.background-backup</string>
+		<string>com.yap.watermelon.hiddenbackup.background-backup</string>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -12,10 +12,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>com.zizicici.watermelon.navigation</string>
+			<string>com.yap.watermelon.hiddenbackup.navigation</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>watermelonbackup</string>
+				<string>watermelonhiddenbackup</string>
 			</array>
 		</dict>
 		<dict>

@@ -1,0 +1,136 @@
+name: Build unsigned hidden-backup IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ipa:
+    name: Release / iphoneos / arm64
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      PROJECT: Watermelon.xcodeproj
+      SCHEME: Watermelon
+      DERIVED_DATA: build/DerivedData
+      PACKAGES: build/SourcePackages
+      LOG_DIR: build/logs
+      IPA_NAME: Watermelon-HiddenBackup-unsigned.ipa
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.2
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Record source revision
+        run: |
+          mkdir -p "$LOG_DIR"
+          git rev-parse HEAD | tee "$LOG_DIR/commit-sha.txt"
+          git status --short | tee "$LOG_DIR/git-status.txt"
+
+      - name: Resolve Swift packages
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -clonedSourcePackagesDirPath "$PACKAGES" \
+            2>&1 | tee "$LOG_DIR/package-resolution.log"
+
+      - name: Run hidden-source unit tests
+        run: |
+          set -o pipefail
+          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ { print $2; exit }')"
+          test -n "$SIMULATOR_UDID"
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -clonedSourcePackagesDirPath "$PACKAGES" \
+            -derivedDataPath build/TestDerivedData \
+            -only-testing:WatermelonTests/LocalDataSourceTests \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$LOG_DIR/hidden-source-tests.log"
+
+      - name: Build unsigned iOS app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            -clonedSourcePackagesDirPath "$PACKAGES" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            DEVELOPMENT_TEAM='' \
+            2>&1 | tee "$LOG_DIR/xcodebuild-release.log"
+
+      - name: Validate and package IPA
+        run: |
+          set -euo pipefail
+          APP="$DERIVED_DATA/Build/Products/Release-iphoneos/Watermelon.app"
+          test -d "$APP"
+          test -f "$APP/Info.plist"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")"
+          test -n "$EXECUTABLE"
+          test -x "$APP/$EXECUTABLE"
+          test "$BUNDLE_ID" = 'com.yap.watermelon.hiddenbackup'
+          test "$DISPLAY_NAME" = 'Watermelon Hidden'
+          test ! -e "$APP/embedded.mobileprovision"
+          test ! -d "$APP/_CodeSignature"
+
+          rm -rf build/package
+          mkdir -p build/package/Payload
+          ditto "$APP" build/package/Payload/Watermelon.app
+          (
+            cd build/package
+            ditto -c -k --sequesterRsrc --keepParent Payload "../$IPA_NAME"
+          )
+
+          unzip -t "build/$IPA_NAME" | tee "$LOG_DIR/ipa-unzip-test.log"
+          unzip -l "build/$IPA_NAME" | tee "$LOG_DIR/ipa-contents.log"
+          unzip -l "build/$IPA_NAME" | grep -q 'Payload/Watermelon.app/Info.plist'
+          unzip -l "build/$IPA_NAME" | grep -q "Payload/Watermelon.app/$EXECUTABLE"
+          shasum -a 256 "build/$IPA_NAME" | tee "$LOG_DIR/ipa-sha256.txt"
+          stat -f '%z bytes' "build/$IPA_NAME" | tee "$LOG_DIR/ipa-size.txt"
+          {
+            echo "Bundle ID: $BUNDLE_ID"
+            echo "Display name: $DISPLAY_NAME"
+            echo "Executable: $EXECUTABLE"
+            echo "Embedded profile: absent"
+            echo "Code signature directory: absent"
+          } | tee "$LOG_DIR/ipa-validation.txt"
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Watermelon-HiddenBackup-unsigned
+          path: build/Watermelon-HiddenBackup-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build and validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Watermelon-HiddenBackup-build-logs
+          path: build/logs
+          if-no-files-found: warn
+          retention-days: 14

@@ -45,6 +45,8 @@ final class MediaDropLocalLibraryController {
         switch scope {
         case .device(let filter):
             return HomeLocalLibraryMenu.deviceTitle(for: filter, isPad: UIDevice.current.userInterfaceIdiom == .pad)
+        case .hidden:
+            return String(localized: "dataSource.hidden", defaultValue: "Hidden Photos Only")
         case .albums(let identifiers):
             if identifiers.count == 1, let album = selectedAlbums.first(where: { identifiers.contains($0.localIdentifier) }) {
                 return album.title
@@ -87,7 +89,15 @@ final class MediaDropLocalLibraryController {
             guard let self, let presenter, self.canChangeScope() else { return }
             self.openAlbumPicker(from: presenter)
         }
-        return UIMenu(children: [deviceMenu, specificAlbums])
+        let hidden = UIAction(
+            title: String(localized: "dataSource.hidden", defaultValue: "Hidden Photos Only"),
+            image: UIImage(systemName: "eye.slash"),
+            attributes: attributes,
+            state: scope == .hidden ? .on : .off
+        ) { [weak self] _ in
+            self?.setScope(.hidden)
+        }
+        return UIMenu(children: [hidden, deviceMenu, specificAlbums])
     }
 
     func setScope(_ scope: HomeLocalLibraryScope, albums: [LocalAlbumDescriptor] = []) {
@@ -106,13 +116,23 @@ final class MediaDropLocalLibraryController {
     }
 
     func validateSelection() throws {
-        guard case .albums(let ids) = scope else { return }
-        try photoLibraryService.validateAlbumSelection(
-            ids, names: Dictionary(selectedAlbums.map { ($0.localIdentifier, $0.title) }, uniquingKeysWith: { _, new in new })
-        )
+        switch scope {
+        case .hidden:
+            try photoLibraryService.validateHiddenAlbumSelection()
+        case .albums(let ids):
+            try photoLibraryService.validateAlbumSelection(
+                ids, names: Dictionary(selectedAlbums.map { ($0.localIdentifier, $0.title) }, uniquingKeysWith: { _, new in new })
+            )
+        case .device:
+            return
+        }
     }
 
     func repairSelection(from presenter: UIViewController) {
+        if scope == .hidden {
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            return
+        }
         openAlbumPicker(from: presenter)
     }
 

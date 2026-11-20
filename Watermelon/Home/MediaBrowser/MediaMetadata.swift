@@ -369,7 +369,7 @@ enum MediaMetadataLoader {
     ) async -> MediaMetadataDocument? {
         guard let asset = PHAsset.fetchAssets(
             withLocalIdentifiers: [localIdentifier],
-            options: PhotoLibraryService.makeAssetFetchOptions()
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: true)
         ).firstObject else { return nil }
 
         let resources = PHAssetResource.assetResources(for: asset)

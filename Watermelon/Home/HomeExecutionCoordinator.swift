@@ -240,17 +240,20 @@ final class HomeExecutionCoordinator {
         let uploadWorkerCountOverride: Int?
         let iCloudPhotoBackupMode: ICloudPhotoBackupMode
         let monthGroupingTimeZone: MonthGroupingTimeZonePreference
+        let hiddenOnly: Bool
 
         static func fromCurrentSettings(
             profile: ServerProfileRecord?,
-            monthGroupingTimeZone: MonthGroupingTimeZonePreference
+            monthGroupingTimeZone: MonthGroupingTimeZonePreference,
+            hiddenOnly: Bool
         ) -> ExecutionSettingsSnapshot {
             ExecutionSettingsSnapshot(
                 uploadWorkerCountOverride: profile.map {
                     BackupWorkerCountResolver.workerCountOverride(for: $0)
                 } ?? BackupWorkerCountMode.getValue().workerCountOverride,
                 iCloudPhotoBackupMode: ICloudPhotoBackupMode.getValue(),
-                monthGroupingTimeZone: monthGroupingTimeZone
+                monthGroupingTimeZone: monthGroupingTimeZone,
+                hiddenOnly: hiddenOnly
             )
         }
 
@@ -258,7 +261,8 @@ final class HomeExecutionCoordinator {
             BackupRunConfigurationOverride(
                 workerCountOverride: uploadWorkerCountOverride,
                 iCloudPhotoBackupMode: iCloudPhotoBackupMode,
-                monthGroupingTimeZone: monthGroupingTimeZone
+                monthGroupingTimeZone: monthGroupingTimeZone,
+                hiddenOnly: hiddenOnly
             )
         }
     }
@@ -304,6 +308,23 @@ final class HomeExecutionCoordinator {
         let remoteOnlyItems: (LibraryMonthKey) async throws -> [RemoteAlbumItem]
         let syncRemoteData: () async -> Set<LibraryMonthKey>
         let refreshLocalIndex: (Set<String>) async -> Set<LibraryMonthKey>
+        let isHiddenOnly: () -> Bool
+
+        init(
+            localAssetIDs: @escaping (LibraryMonthKey) -> Set<String>,
+            localMonthGroupingTimeZone: @escaping () -> MonthGroupingTimeZonePreference,
+            remoteOnlyItems: @escaping (LibraryMonthKey) async throws -> [RemoteAlbumItem],
+            syncRemoteData: @escaping () async -> Set<LibraryMonthKey>,
+            refreshLocalIndex: @escaping (Set<String>) async -> Set<LibraryMonthKey>,
+            isHiddenOnly: @escaping () -> Bool = { false }
+        ) {
+            self.localAssetIDs = localAssetIDs
+            self.localMonthGroupingTimeZone = localMonthGroupingTimeZone
+            self.remoteOnlyItems = remoteOnlyItems
+            self.syncRemoteData = syncRemoteData
+            self.refreshLocalIndex = refreshLocalIndex
+            self.isHiddenOnly = isHiddenOnly
+        }
     }
 
     // MARK: - Dependencies
@@ -446,7 +467,8 @@ final class HomeExecutionCoordinator {
         clearPendingSkipDecision()
         executionSettingsSnapshot = ExecutionSettingsSnapshot.fromCurrentSettings(
             profile: dependencies.appSession.activeProfile,
-            monthGroupingTimeZone: dataAccess.localMonthGroupingTimeZone()
+            monthGroupingTimeZone: dataAccess.localMonthGroupingTimeZone(),
+            hiddenOnly: dataAccess.isHiddenOnly()
         )
         dataRefresher.reset()
         logEntries.removeAll(keepingCapacity: true)

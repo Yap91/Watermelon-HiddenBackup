@@ -232,6 +232,9 @@ struct BackupRunPreparationService: Sendable {
             try request.terminationControl?.checkDrainRequested()
             try await ensurePhotoAuthorization()
             try request.terminationControl?.checkDrainRequested()
+            if request.hiddenOnly {
+                try photoLibraryService.validateHiddenAlbumSelection()
+            }
 
             if request.iCloudPhotoBackupMode == .enable {
                 eventStream.emitLog(
@@ -399,12 +402,28 @@ struct BackupRunPreparationService: Sendable {
                 try request.terminationControl?.checkDrainRequested()
 
                 eventStream.emit(.stageChanged(.scanningLocal))
-                let retryAssets = loadRetryAssets(from: onlyAssetLocalIdentifiers)
+                let retryAssets = loadRetryAssets(
+                    from: onlyAssetLocalIdentifiers,
+                    hiddenOnly: request.hiddenOnly
+                )
 
                 var monthAssetIDsByMonth: [MonthKey: [String]]
                 if targetsExplicitAssets {
                     monthAssetIDsByMonth = BackupMonthScheduler.buildMonthAssetIDsByMonth(
                         from: retryAssets,
+                        calendar: monthCalendar
+                    )
+                } else if request.hiddenOnly {
+                    try photoLibraryService.validateHiddenAlbumSelection()
+                    let assets = photoLibraryService.fetchHiddenAssets(
+                        ascendingByCreationDate: true,
+                        since: monthScope?.cutoff,
+                        shouldCancel: { Task.isCancelled || request.terminationControl?.shouldDrain == true }
+                    )
+                    try Task.checkCancellation()
+                    try photoLibraryService.validateHiddenAlbumSelection()
+                    monthAssetIDsByMonth = BackupMonthScheduler.buildMonthAssetIDsByMonth(
+                        from: assets,
                         calendar: monthCalendar
                     )
                 } else if let albums = request.albumSelection {
@@ -2064,13 +2083,21 @@ struct BackupRunPreparationService: Sendable {
         return (plan.layout, plan.session, plan.monthsListing)
     }
 
-    private func loadRetryAssets(from onlyAssetLocalIdentifiers: Set<String>?) -> [PHAsset] {
+    private func loadRetryAssets(
+        from onlyAssetLocalIdentifiers: Set<String>?,
+        hiddenOnly: Bool
+    ) -> [PHAsset] {
         guard let retryTargets = onlyAssetLocalIdentifiers else { return [] }
-        let fetched = PHAsset.fetchAssets(withLocalIdentifiers: Array(retryTargets), options: PhotoLibraryService.makeAssetFetchOptions())
+        let fetched = PHAsset.fetchAssets(
+            withLocalIdentifiers: Array(retryTargets),
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: hiddenOnly)
+        )
         var retryAssets: [PHAsset] = []
         retryAssets.reserveCapacity(fetched.count)
         for index in 0 ..< fetched.count {
-            retryAssets.append(fetched.object(at: index))
+            let asset = fetched.object(at: index)
+            guard !hiddenOnly || HiddenAssetSelectionPolicy.accepts(asset) else { continue }
+            retryAssets.append(asset)
         }
         retryAssets.sort { lhs, rhs in
             (lhs.creationDate ?? .distantPast) < (rhs.creationDate ?? .distantPast)

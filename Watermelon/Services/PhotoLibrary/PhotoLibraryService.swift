@@ -11,12 +11,24 @@ struct ExportedResourceFile: Sendable {
 
 enum PhotoLibraryQuery: Equatable, Sendable {
     case library(PhotoLibraryMediaFilter)
+    case hidden
     case albums(Set<String>)
+}
+
+enum HiddenAssetSelectionPolicy {
+    static func accepts(isHidden: Bool) -> Bool {
+        isHidden
+    }
+
+    static func accepts(_ asset: PHAsset) -> Bool {
+        accepts(isHidden: asset.isHidden)
+    }
 }
 
 struct PhotoLibraryFetchCollection {
     enum Source: Hashable {
         case library
+        case hidden
         case album(String)
         case burst(String)
     }
@@ -124,10 +136,26 @@ final class PhotoLibraryService: @unchecked Sendable {
         PHPhotoLibrary.authorizationStatus(for: .readWrite)
     }
 
-    static func makeAssetFetchOptions() -> PHFetchOptions {
+    static func makeAssetFetchOptions(includeHiddenAssets: Bool = false) -> PHFetchOptions {
         let options = PHFetchOptions()
         // Every burst frame needs its own backup and download identity.
         options.includeAllBurstAssets = true
+        options.includeHiddenAssets = includeHiddenAssets
+        return options
+    }
+
+    static func makeHiddenAssetFetchOptions(
+        ascendingByCreationDate: Bool = false,
+        since: Date? = nil
+    ) -> PHFetchOptions {
+        let options = makeAssetFetchOptions()
+        options.includeHiddenAssets = true
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: ascendingByCreationDate)]
+        var predicates = [NSPredicate(format: "hidden == YES")]
+        if let since {
+            predicates.append(NSPredicate(format: "creationDate >= %@", since as NSDate))
+        }
+        options.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
         return options
     }
 
@@ -189,6 +217,13 @@ final class PhotoLibraryService: @unchecked Sendable {
         switch query {
         case .library(let filter):
             return [PhotoLibraryFetchCollection(source: .library, assets: fetchAssetsResult(mediaFilter: filter))]
+        case .hidden:
+            guard authorizationStatus() == .authorized,
+                  let collection = resolveHiddenAlbumCollection() else { return [] }
+            return [PhotoLibraryFetchCollection(
+                source: .hidden,
+                assets: PHAsset.fetchAssets(in: collection, options: Self.makeHiddenAssetFetchOptions())
+            )]
         case .albums(let identifiers):
             guard (try? validateAlbumSelection(identifiers)) != nil else { return [] }
             let collections = resolveUserAlbumCollections(identifiers)
@@ -204,7 +239,9 @@ final class PhotoLibraryService: @unchecked Sendable {
         var ids = Set<String>()
         for result in fetchResults(query: query) {
             for index in 0 ..< result.count {
-                ids.insert(result.object(at: index).localIdentifier)
+                let asset = result.object(at: index)
+                guard query != .hidden || HiddenAssetSelectionPolicy.accepts(asset) else { continue }
+                ids.insert(asset.localIdentifier)
             }
         }
         return ids
@@ -288,6 +325,14 @@ final class PhotoLibraryService: @unchecked Sendable {
         return result
     }
 
+    func resolveHiddenAlbumCollection() -> PHAssetCollection? {
+        PHAssetCollection.fetchAssetCollections(
+            with: .smartAlbum,
+            subtype: .smartAlbumAllHidden,
+            options: nil
+        ).firstObject
+    }
+
     func existingUserAlbumIdentifiers(in albumIdentifiers: Set<String>) -> Set<String> {
         Set(resolveUserAlbumCollections(albumIdentifiers).map(\.localIdentifier))
     }
@@ -350,6 +395,22 @@ final class PhotoLibraryService: @unchecked Sendable {
                 assets.append(result.object(at: index))
             }
             return assets
+        case .hidden:
+            guard authorizationStatus() == .authorized,
+                  let collection = resolveHiddenAlbumCollection() else { return [] }
+            let result = PHAsset.fetchAssets(
+                in: collection,
+                options: Self.makeHiddenAssetFetchOptions(ascendingByCreationDate: ascendingByCreationDate)
+            )
+            var assets: [PHAsset] = []
+            assets.reserveCapacity(result.count)
+            for index in 0 ..< result.count {
+                if shouldCancel() { return [] }
+                let asset = result.object(at: index)
+                guard HiddenAssetSelectionPolicy.accepts(asset) else { continue }
+                assets.append(asset)
+            }
+            return assets
         case .albums(let identifiers):
             return fetchAssets(
                 inAlbumIdentifiers: identifiers,
@@ -357,6 +418,32 @@ final class PhotoLibraryService: @unchecked Sendable {
                 shouldCancel: shouldCancel
             )
         }
+    }
+
+    func fetchHiddenAssets(
+        ascendingByCreationDate: Bool = false,
+        since: Date? = nil,
+        shouldCancel: () -> Bool = { false }
+    ) -> [PHAsset] {
+        guard authorizationStatus() == .authorized,
+              let collection = resolveHiddenAlbumCollection(),
+              !shouldCancel() else { return [] }
+        let result = PHAsset.fetchAssets(
+            in: collection,
+            options: Self.makeHiddenAssetFetchOptions(
+                ascendingByCreationDate: ascendingByCreationDate,
+                since: since
+            )
+        )
+        var assets: [PHAsset] = []
+        assets.reserveCapacity(result.count)
+        for index in 0 ..< result.count {
+            guard !shouldCancel() else { return [] }
+            let asset = result.object(at: index)
+            guard HiddenAssetSelectionPolicy.accepts(asset) else { continue }
+            assets.append(asset)
+        }
+        return assets
     }
 
     @discardableResult
@@ -397,7 +484,10 @@ final class PhotoLibraryService: @unchecked Sendable {
 
     func fetchAssets(localIdentifiers: Set<String>) -> [PHAsset] {
         guard !localIdentifiers.isEmpty else { return [] }
-        let result = PHAsset.fetchAssets(withLocalIdentifiers: Array(localIdentifiers), options: PhotoLibraryService.makeAssetFetchOptions())
+        let result = PHAsset.fetchAssets(
+            withLocalIdentifiers: Array(localIdentifiers),
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: true)
+        )
         var assets: [PHAsset] = []
         assets.reserveCapacity(result.count)
         for index in 0 ..< result.count {

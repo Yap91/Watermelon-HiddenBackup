@@ -12,6 +12,8 @@ enum LocalAlbumSelectionPresentation {
             preferredStyle: .alert
         )
         let needsPermission = error == .fullPhotoAccessRequired
+            || error == .hiddenAlbumUnavailable
+            || error == .hiddenAlbumEmptyOrProtected
         alert.addAction(UIAlertAction(
             title: needsPermission ? String(localized: "dataSource.openSettings") : String(localized: "dataSource.reselect"),
             style: .default
@@ -133,12 +135,17 @@ final class DefaultDataSourceViewController: UITableViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        guard let source = readSource() ?? inheritedSource?(), source.kind == .albums else { return }
+        guard let source = readSource() ?? inheritedSource?(),
+              source.kind == .albums || source.kind == .hidden else { return }
         do {
-            try service.validateAlbumSelection(
-                source.scope.selectedAlbumIdentifiers,
-                names: Dictionary(source.albums.map { ($0.id, $0.name) }, uniquingKeysWith: { _, new in new })
-            )
+            if source.kind == .hidden {
+                try service.validateHiddenAlbumSelection()
+            } else {
+                try service.validateAlbumSelection(
+                    source.scope.selectedAlbumIdentifiers,
+                    names: Dictionary(source.albums.map { ($0.id, $0.name) }, uniquingKeysWith: { _, new in new })
+                )
+            }
             lastPresentedError = nil
         } catch let error as LocalDataSourceError {
             guard error != lastPresentedError else { return }
@@ -181,7 +188,51 @@ final class DefaultDataSourceViewController: UITableViewController {
             return
         }
         let kind = LocalDataSource.Kind.allCases[indexPath.row - (inheritedSource == nil ? 0 : 1)]
-        if kind == .albums { selectAlbums() } else { save(LocalDataSource(kind: kind)) }
+        if kind == .albums {
+            selectAlbums()
+        } else if kind == .hidden {
+            selectHidden()
+        } else {
+            save(LocalDataSource(kind: kind))
+        }
+    }
+
+    private func selectHidden(confirmingAccess: Bool = true) {
+        if confirmingAccess {
+            let alert = UIAlertController(
+                title: String(localized: "dataSource.hidden", defaultValue: "Hidden Photos Only"),
+                message: String(
+                    localized: "dataSource.hidden.accessWarning",
+                    defaultValue: "Watermelon cannot bypass Apple’s Hidden Album Face ID protection. If the hidden album returns no photos, temporarily disable Face ID protection in Settings > Apps > Photos, retry, and re-enable it after testing. The app will never fall back to the full library."
+                ),
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: String(localized: "common.cancel"), style: .cancel))
+            alert.addAction(UIAlertAction(
+                title: String(localized: "common.continue", defaultValue: "Continue"),
+                style: .default
+            ) { [weak self] _ in
+                self?.selectHidden(confirmingAccess: false)
+            })
+            present(alert, animated: ConsideringUser.animated)
+            return
+        }
+        if service.authorizationStatus() == .notDetermined {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                _ = await self.service.requestAuthorization()
+                self.selectHidden(confirmingAccess: false)
+            }
+            return
+        }
+        do {
+            try service.validateHiddenAlbumSelection()
+            save(LocalDataSource(kind: .hidden))
+        } catch let error as LocalDataSourceError {
+            LocalAlbumSelectionPresentation.showError(error, from: self, reselect: {})
+        } catch {
+            LocalAlbumSelectionPresentation.showError(.sourceUnavailable, from: self, reselect: {})
+        }
     }
 
     private func selectAlbums() {

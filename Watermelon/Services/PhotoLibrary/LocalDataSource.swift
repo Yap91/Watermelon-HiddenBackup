@@ -19,14 +19,14 @@ struct LocalAlbumReference: Codable, Hashable, Sendable {
 
 struct LocalDataSource: Codable, Hashable, Sendable {
     enum Kind: String, Codable, CaseIterable, Sendable {
-        case all, photos, videos, albums
+        case all, photos, videos, hidden, albums
 
         var mediaFilter: PhotoLibraryMediaFilter? {
             switch self {
             case .all: .all
             case .photos: .photos
             case .videos: .videos
-            case .albums: nil
+            case .hidden, .albums: nil
             }
         }
     }
@@ -36,6 +36,7 @@ struct LocalDataSource: Codable, Hashable, Sendable {
 
     var id: String { kind.rawValue }
     var scope: HomeLocalLibraryScope {
+        if kind == .hidden { return .hidden }
         if let filter = kind.mediaFilter { return .device(filter) }
         return .albums(Set(albums.map(\.id)))
     }
@@ -45,6 +46,8 @@ struct LocalDataSource: Codable, Hashable, Sendable {
         case .all: String(localized: "dataSource.all")
         case .photos: String(localized: "dataSource.photos")
         case .videos: String(localized: "dataSource.videos")
+        case .hidden:
+            String(localized: "dataSource.hidden", defaultValue: "Hidden Photos Only")
         case .albums:
             if albums.isEmpty {
                 String(localized: "home.localSource.specificAlbums")
@@ -57,6 +60,12 @@ struct LocalDataSource: Codable, Hashable, Sendable {
     }
 
     var subtitle: String? {
+        if kind == .hidden {
+            return String(
+                localized: "dataSource.hidden.subtitle",
+                defaultValue: "Full Photos access is required. If no items appear, temporarily disable Hidden Album Face ID in Photos settings, then re-enable it after testing."
+            )
+        }
         guard kind == .albums else { return nil }
         return albums.isEmpty ? String(localized: "common.none") : ListFormatter.localizedString(byJoining: albums.map(\.name))
     }
@@ -126,6 +135,8 @@ final class LocalDataSourceStore: @unchecked Sendable {
 
 enum LocalDataSourceError: LocalizedError, Equatable {
     case fullPhotoAccessRequired
+    case hiddenAlbumUnavailable
+    case hiddenAlbumEmptyOrProtected
     case emptyAlbums
     case unavailableAlbums([String])
     case sourceUnavailable
@@ -133,6 +144,16 @@ enum LocalDataSourceError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .fullPhotoAccessRequired: String(localized: "dataSource.error.fullAccess")
+        case .hiddenAlbumUnavailable:
+            String(
+                localized: "dataSource.error.hiddenUnavailable",
+                defaultValue: "The system Hidden album is unavailable. Watermelon will not fall back to the full photo library."
+            )
+        case .hiddenAlbumEmptyOrProtected:
+            String(
+                localized: "dataSource.error.hiddenEmptyOrProtected",
+                defaultValue: "No readable hidden photos were found. Confirm Full Photos access and, if Hidden Album Face ID protection is enabled, temporarily disable it in Settings > Apps > Photos. Watermelon will never fall back to the full library. Re-enable Face ID protection after testing."
+            )
         case .emptyAlbums: String(localized: "dataSource.error.empty")
         case .unavailableAlbums(let names):
             String(format: String(localized: "dataSource.error.unavailable"), ListFormatter.localizedString(byJoining: names))
@@ -165,5 +186,18 @@ extension PhotoLibraryService {
             existing: { existingUserAlbumIdentifiers(in: ids) },
             names: cachedNames
         )
+    }
+
+    func validateHiddenAlbumSelection() throws {
+        guard authorizationStatus() == .authorized else {
+            throw LocalDataSourceError.fullPhotoAccessRequired
+        }
+        guard let collection = resolveHiddenAlbumCollection() else {
+            throw LocalDataSourceError.hiddenAlbumUnavailable
+        }
+        let assets = PHAsset.fetchAssets(in: collection, options: Self.makeHiddenAssetFetchOptions())
+        guard (0 ..< assets.count).contains(where: { HiddenAssetSelectionPolicy.accepts(assets.object(at: $0)) }) else {
+            throw LocalDataSourceError.hiddenAlbumEmptyOrProtected
+        }
     }
 }

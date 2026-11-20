@@ -108,6 +108,7 @@ final class LocalMediaSource: MediaBrowserSource, @unchecked Sendable {
             let queryName: String
             switch query {
             case .library(let filter): queryName = filter.rawValue
+            case .hidden: queryName = "hidden"
             case .albums(let identifiers): queryName = "albums(\(identifiers.count))"
             }
 
@@ -190,7 +191,7 @@ final class LocalMediaSource: MediaBrowserSource, @unchecked Sendable {
                 }
                 guard !cancelled else { return .empty }
                 projectionMs = (CFAbsoluteTimeGetCurrent() - projectionStartedAt) * 1_000
-            case .albums:
+            case .hidden, .albums:
                 let photoFetchStartedAt = CFAbsoluteTimeGetCurrent()
                 let assets = photoLibraryService.fetchAssets(
                     for: query,

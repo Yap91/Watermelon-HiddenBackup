@@ -2,6 +2,7 @@ import Foundation
 
 enum HomeLocalLibraryScope: Hashable, Sendable {
     case device(PhotoLibraryMediaFilter)
+    case hidden
     case albums(Set<String>)
 
     var deviceMediaFilter: PhotoLibraryMediaFilter? {
@@ -18,7 +19,7 @@ enum HomeLocalLibraryScope: Hashable, Sendable {
 
     var selectedAlbumIdentifiers: Set<String> {
         switch self {
-        case .device:
+        case .device, .hidden:
             return []
         case .albums(let ids):
             return ids
@@ -29,6 +30,8 @@ enum HomeLocalLibraryScope: Hashable, Sendable {
         switch self {
         case .device(let filter):
             return .library(filter)
+        case .hidden:
+            return .hidden
         case .albums(let ids):
             return .albums(ids)
         }

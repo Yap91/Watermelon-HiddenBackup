@@ -85,15 +85,18 @@ struct BackupRunConfigurationOverride: Sendable {
     let workerCountOverride: Int?
     let iCloudPhotoBackupMode: ICloudPhotoBackupMode
     let monthGroupingTimeZone: MonthGroupingTimeZonePreference
+    let hiddenOnly: Bool
 
     init(
         workerCountOverride: Int?,
         iCloudPhotoBackupMode: ICloudPhotoBackupMode,
-        monthGroupingTimeZone: MonthGroupingTimeZonePreference
+        monthGroupingTimeZone: MonthGroupingTimeZonePreference,
+        hiddenOnly: Bool = false
     ) {
         self.workerCountOverride = workerCountOverride
         self.iCloudPhotoBackupMode = iCloudPhotoBackupMode
         self.monthGroupingTimeZone = monthGroupingTimeZone
+        self.hiddenOnly = hiddenOnly
     }
 }
 
@@ -155,6 +158,7 @@ struct BackupRunRequest: Sendable {
     let monthScope: BackupMonthScope
     let mediaFilter: PhotoLibraryMediaFilter
     let albumSelection: [LocalAlbumReference]?
+    let hiddenOnly: Bool
     let monthAssetIDsProvider: BackupMonthAssetIDsProvider?
     let onRemoteIndexProgress: (@Sendable (RemoteSyncProgress) -> Void)?
     let monthOrdering: BackupMonthOrdering
@@ -174,6 +178,7 @@ struct BackupRunRequest: Sendable {
         monthScope: BackupMonthScope = .all,
         mediaFilter: PhotoLibraryMediaFilter = .all,
         albumSelection: [LocalAlbumReference]? = nil,
+        hiddenOnly: Bool = false,
         monthAssetIDsProvider: BackupMonthAssetIDsProvider? = nil,
         onRemoteIndexProgress: (@Sendable (RemoteSyncProgress) -> Void)? = nil,
         monthOrdering: BackupMonthOrdering = .balanced,
@@ -192,6 +197,7 @@ struct BackupRunRequest: Sendable {
         self.monthScope = monthScope
         self.mediaFilter = mediaFilter
         self.albumSelection = albumSelection
+        self.hiddenOnly = hiddenOnly
         self.monthAssetIDsProvider = monthAssetIDsProvider
         self.onRemoteIndexProgress = onRemoteIndexProgress
         self.monthOrdering = monthOrdering

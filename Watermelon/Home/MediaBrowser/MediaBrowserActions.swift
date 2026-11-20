@@ -443,7 +443,10 @@ final class MediaBrowserActionRunner {
                     guard acceptedBackupRisk else { return }
                 }
             }
-            let assets = PHAsset.fetchAssets(withLocalIdentifiers: [localID], options: PhotoLibraryService.makeAssetFetchOptions())
+            let assets = PHAsset.fetchAssets(
+                withLocalIdentifiers: [localID],
+                options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: true)
+            )
             guard assets.count > 0 else {
                 // A fetch miss under limited access is ambiguous — the asset may merely be excluded from the
                 // selection, not gone. Purging + reporting success would flip a still-existing photo to
@@ -778,7 +781,10 @@ final class MediaBrowserActionRunner {
             }
             if !deviceItems.isEmpty {
                 let localIDs = deviceItems.compactMap(\.localIdentifier)
-                let assets = PHAsset.fetchAssets(withLocalIdentifiers: localIDs, options: PhotoLibraryService.makeAssetFetchOptions())
+                let assets = PHAsset.fetchAssets(
+                    withLocalIdentifiers: localIDs,
+                    options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: true)
+                )
                 var fetched = Set<String>()
                 assets.enumerateObjects { asset, _, _ in fetched.insert(asset.localIdentifier) }
                 if assets.count > 0 {

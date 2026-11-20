@@ -58,6 +58,11 @@ final class TransferLocalMediaSource: MediaBrowserSource, @unchecked Sendable {
                     append(asset)
                 }
                 guard !cancelled else { return nil }
+            case .hidden:
+                for asset in photoLibraryService.fetchHiddenAssets(shouldCancel: { Task.isCancelled }) {
+                    guard !Task.isCancelled else { return nil }
+                    append(asset)
+                }
             case .albums(let identifiers):
                 guard photoLibraryService.enumerateAssets(
                     inAlbumIdentifiers: identifiers,
@@ -86,9 +91,15 @@ final class TransferLocalMediaSource: MediaBrowserSource, @unchecked Sendable {
     }
 
     private func validateSelection() async -> MediaBrowserLoadResult? {
-        guard case .albums(let ids) = query else { return nil }
         do {
-            try photoLibraryService.validateAlbumSelection(ids, names: albumNames)
+            switch query {
+            case .hidden:
+                try photoLibraryService.validateHiddenAlbumSelection()
+            case .albums(let ids):
+                try photoLibraryService.validateAlbumSelection(ids, names: albumNames)
+            case .library:
+                return nil
+            }
             return nil
         } catch let error as LocalDataSourceError {
             guard !Task.isCancelled else { return .cancelled }

@@ -18,6 +18,35 @@ struct AssetProcessContext {
     let assetPosition: Int
     let totalAssets: Int
     let writeMode: RepoWriteMode
+    let hiddenOnly: Bool
+
+    init(
+        workerID: Int,
+        asset: PHAsset,
+        selectedResources: [BackupSelectedResource],
+        cachedLocalHash: LocalAssetHashCache?,
+        iCloudPhotoBackupMode: ICloudPhotoBackupMode,
+        pass: AssetUploadPass,
+        monthStore: MonthManifestStore,
+        profile: ServerProfileRecord,
+        assetPosition: Int,
+        totalAssets: Int,
+        writeMode: RepoWriteMode,
+        hiddenOnly: Bool = false
+    ) {
+        self.workerID = workerID
+        self.asset = asset
+        self.selectedResources = selectedResources
+        self.cachedLocalHash = cachedLocalHash
+        self.iCloudPhotoBackupMode = iCloudPhotoBackupMode
+        self.pass = pass
+        self.monthStore = monthStore
+        self.profile = profile
+        self.assetPosition = assetPosition
+        self.totalAssets = totalAssets
+        self.writeMode = writeMode
+        self.hiddenOnly = hiddenOnly
+    }
 
     var allowsNetworkExport: Bool {
         switch pass {
@@ -48,7 +77,8 @@ struct AssetProcessContext {
             profile: profile,
             assetPosition: assetPosition,
             totalAssets: totalAssets,
-            writeMode: writeMode
+            writeMode: writeMode,
+            hiddenOnly: hiddenOnly
         )
     }
 }

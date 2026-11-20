@@ -11,7 +11,7 @@ final class BrowserLinkPairingTests: XCTestCase {
         XCTAssertNil(BrowserLinkTransferRatePolicy.maximumBytesPerSecond(
             rateLimitEnabled: false
         ))
-        XCTAssertEqual(BrowserLinkRateLimitSetting.defaultOption, .standard)
+        XCTAssertEqual(BrowserLinkRateLimitSetting.defaultOption, .unlimited)
         XCTAssertEqual(BrowserLinkRateLimitSetting.standard.rawValue, 1)
         XCTAssertEqual(BrowserLinkRateLimitSetting.unlimited.rawValue, 0)
         XCTAssertEqual(BrowserLinkRateLimitSetting.getOptions(), [.standard, .unlimited])

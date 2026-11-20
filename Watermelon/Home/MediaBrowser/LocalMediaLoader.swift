@@ -55,6 +55,9 @@ enum LocalMediaLoader {
     }
 
     private static func fetchAsset(_ localIdentifier: String) -> PHAsset? {
-        PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: PhotoLibraryService.makeAssetFetchOptions()).firstObject
+        PHAsset.fetchAssets(
+            withLocalIdentifiers: [localIdentifier],
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: true)
+        ).firstObject
     }
 }

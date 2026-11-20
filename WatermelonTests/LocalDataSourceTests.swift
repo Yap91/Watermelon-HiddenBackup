@@ -136,7 +136,7 @@ final class LocalDataSourceTests: XCTestCase {
         }
         let albums = [LocalAlbumEntity(travel), LocalAlbumEntity(favorites), LocalAlbumEntity(travel)]
         XCTAssertEqual(try entity.resolve(albums: albums)?.albums, [travel, favorites])
-        for kind: LocalDataSource.Kind in [.all, .photos, .videos] {
+        for kind: LocalDataSource.Kind in [.all, .photos, .videos, .hidden] {
             XCTAssertEqual(try LocalDataSourceEntity(kind: kind).resolve(albums: albums), LocalDataSource(kind: kind))
         }
     }
@@ -177,7 +177,7 @@ final class LocalDataSourceTests: XCTestCase {
             XCTAssertEqual(try firstShortcut.dataSource.resolve(albums: firstShortcut.albums)?.albums, [travel, favorites])
             XCTAssertEqual(try secondShortcut.dataSource.resolve(albums: secondShortcut.albums)?.albums, [favorites])
             let suggestions = try await LocalDataSourceQuery().suggestedEntities()
-            XCTAssertEqual(suggestions.map(\.id), ["nodeDefault", "all", "photos", "videos", "albums"])
+            XCTAssertEqual(suggestions.map(\.id), ["nodeDefault", "all", "photos", "videos", "hidden", "albums"])
             try LocalDataSourceStore.shared.setDefault(saved)
         }
         backup.setLocalLibraryScope(.device(.photos))
@@ -185,5 +185,18 @@ final class LocalDataSourceTests: XCTestCase {
         XCTAssertEqual(LocalDataSourceStore.shared.defaultSource, saved)
         XCTAssertEqual(backup.localLibraryScope, .device(.photos))
         XCTAssertEqual(drop.scope, .device(.videos))
+    }
+
+    func testHiddenSourceNeverExpandsToDeviceLibrary() throws {
+        try store.setDefault(LocalDataSource(kind: .hidden))
+        let reloaded = LocalDataSourceStore(defaults: defaults!)
+        XCTAssertEqual(reloaded.defaultSource.scope, .hidden)
+        XCTAssertFalse(reloaded.defaultSource.scope.isEntireLibrary)
+        XCTAssertEqual(reloaded.defaultSource.scope.photoLibraryQuery, .hidden)
+    }
+
+    func testHiddenAssetSelectionPolicyRejectsOrdinaryAssets() {
+        XCTAssertTrue(HiddenAssetSelectionPolicy.accepts(isHidden: true))
+        XCTAssertFalse(HiddenAssetSelectionPolicy.accepts(isHidden: false))
     }
 }

@@ -380,7 +380,10 @@ final class RemoteMediaSource: MediaBrowserSource, @unchecked Sendable {
     }
 
     private static func requestLocalLivePhoto(localIdentifier: String, targetSize: CGSize) async -> PHLivePhoto? {
-        let result = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: PhotoLibraryService.makeAssetFetchOptions())
+        let result = PHAsset.fetchAssets(
+            withLocalIdentifiers: [localIdentifier],
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: true)
+        )
         guard result.count > 0 else { return nil }
         let asset = result.object(at: 0)
         let options = PHLivePhotoRequestOptions()

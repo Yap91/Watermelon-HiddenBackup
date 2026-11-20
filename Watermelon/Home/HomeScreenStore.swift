@@ -163,7 +163,8 @@ final class HomeScreenStore {
         let photoLib = dependencies.photoLibraryService
         self.scopeNormalizer = HomeScopeNormalizer(hooks: HomeScopeNormalizer.Hooks(
             authorizationStatus: { photoLib.authorizationStatus() },
-            existingUserAlbumIdentifiers: { ids in photoLib.existingUserAlbumIdentifiers(in: ids) }
+            existingUserAlbumIdentifiers: { ids in photoLib.existingUserAlbumIdentifiers(in: ids) },
+            validateHiddenSelection: { try photoLib.validateHiddenAlbumSelection() }
         ))
         let backupCoordinator = dependencies.backupCoordinator
         let scopeController = self.scopeController
@@ -178,6 +179,7 @@ final class HomeScreenStore {
         self.dataManager.setAppActive(false)
         self.connectionController = HomeConnectionController(dependencies: dependencies)
         let connectionCtrl = self.connectionController
+        let scopeCtrl = self.scopeController
         self.executionCoordinator = HomeExecutionCoordinator(
             dependencies: dependencies,
             dataAccess: HomeExecutionCoordinator.DataAccess(
@@ -195,7 +197,8 @@ final class HomeScreenStore {
                 },
                 refreshLocalIndex: { [dataManager] assetIDs in
                     await dataManager.refreshLocalIndex(forAssetIDs: assetIDs)
-                }
+                },
+                isHiddenOnly: { [scopeCtrl] in scopeCtrl.activeScope == .hidden }
             )
         )
         self.pipBridge = PiPExecutionBridge(coordinator: self.executionCoordinator)

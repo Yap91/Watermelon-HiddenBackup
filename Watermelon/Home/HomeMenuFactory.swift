@@ -70,6 +70,16 @@ struct HomeMenuFactory {
             hooks.openLocalAlbumPicker()
         }
 
+        let hiddenAction = UIAction(
+            title: String(localized: "dataSource.hidden", defaultValue: "Hidden Photos Only"),
+            image: UIImage(systemName: "eye.slash"),
+            attributes: attributes,
+            state: store.localLibraryScope == .hidden ? .on : .off
+        ) { [store, hooks] _ in
+            store.setLocalLibraryScope(.hidden)
+            hooks.refreshLocalLibraryMenu()
+        }
+
         let localIndexAction = UIAction(
             title: String(localized: "home.localIndex.title"),
             image: UIImage(systemName: "square.stack.3d.up"),
@@ -92,7 +102,7 @@ struct HomeMenuFactory {
             children: [localIndexAction, duplicatesAction]
         )
 
-        return UIMenu(children: [deviceMenu, specificAlbumsAction, toolsSection])
+        return UIMenu(children: [hiddenAction, deviceMenu, specificAlbumsAction, toolsSection])
     }
 
     func buildDestination() -> UIMenu {

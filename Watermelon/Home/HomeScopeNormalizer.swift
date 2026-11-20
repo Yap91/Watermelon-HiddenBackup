@@ -8,6 +8,17 @@ final class HomeScopeNormalizer {
     struct Hooks {
         var authorizationStatus: () -> PHAuthorizationStatus
         var existingUserAlbumIdentifiers: (Set<String>) -> Set<String>
+        var validateHiddenSelection: () throws -> Void
+
+        init(
+            authorizationStatus: @escaping () -> PHAuthorizationStatus,
+            existingUserAlbumIdentifiers: @escaping (Set<String>) -> Set<String>,
+            validateHiddenSelection: @escaping () throws -> Void = {}
+        ) {
+            self.authorizationStatus = authorizationStatus
+            self.existingUserAlbumIdentifiers = existingUserAlbumIdentifiers
+            self.validateHiddenSelection = validateHiddenSelection
+        }
     }
 
     private let hooks: Hooks
@@ -20,6 +31,16 @@ final class HomeScopeNormalizer {
     }
 
     func normalize(_ scope: HomeLocalLibraryScope) -> (scope: HomeLocalLibraryScope, alert: Alert?) {
+        if scope == .hidden {
+            do {
+                try hooks.validateHiddenSelection()
+                return (scope, nil)
+            } catch let error as LocalDataSourceError {
+                return (scope, error)
+            } catch {
+                return (scope, .sourceUnavailable)
+            }
+        }
         guard case .albums(let ids) = scope else { return (scope, nil) }
         let authorization = hooks.authorizationStatus()
         guard authorization == .authorized || authorization == .limited else { return (scope, nil) }

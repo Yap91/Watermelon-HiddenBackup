@@ -484,6 +484,7 @@ struct BackupParallelExecutor: Sendable {
         profile: ServerProfileRecord,
         workerCountOverride: Int?,
         iCloudPhotoBackupMode: ICloudPhotoBackupMode,
+        hiddenOnly: Bool = false,
         eventStream: BackupEventStream,
         incrementalFlushInterval: Int? = nil,
         onMonthUploaded: BackupMonthFinalizer? = nil,
@@ -548,6 +549,7 @@ struct BackupParallelExecutor: Sendable {
                 preparedRun: preparedRun,
                 profile: profile,
                 iCloudPhotoBackupMode: iCloudPhotoBackupMode,
+                hiddenOnly: hiddenOnly,
                 eventStream: eventStream,
                 aggregator: aggregator,
                 clientPool: clientPool,
@@ -575,6 +577,7 @@ struct BackupParallelExecutor: Sendable {
                     preparedRun: preparedRun,
                     profile: profile,
                     iCloudPhotoBackupMode: iCloudPhotoBackupMode,
+                    hiddenOnly: hiddenOnly,
                     eventStream: eventStream,
                     aggregator: aggregator,
                     clientPool: clientPool,
@@ -635,6 +638,7 @@ struct BackupParallelExecutor: Sendable {
         preparedRun: BackupPreparedRun,
         profile: ServerProfileRecord,
         iCloudPhotoBackupMode: ICloudPhotoBackupMode,
+        hiddenOnly: Bool,
         eventStream: BackupEventStream,
         aggregator: ParallelBackupProgressAggregator,
         clientPool: StorageClientPool,
@@ -659,6 +663,7 @@ struct BackupParallelExecutor: Sendable {
                         includedAssetIDs: includedAssetIDs,
                         profile: profile,
                         iCloudPhotoBackupMode: iCloudPhotoBackupMode,
+                        hiddenOnly: hiddenOnly,
                         snapshotSeedLookup: snapshotSeedLookup,
                         writeMode: preparedRun.writeMode,
                         eventStream: eventStream,
@@ -860,6 +865,7 @@ struct BackupParallelExecutor: Sendable {
         includedAssetIDs: Set<String>?,
         profile: ServerProfileRecord,
         iCloudPhotoBackupMode: ICloudPhotoBackupMode,
+        hiddenOnly: Bool,
         snapshotSeedLookup: MonthSeedLookup?,
         writeMode: RepoWriteMode,
         eventStream: BackupEventStream,
@@ -1033,7 +1039,8 @@ struct BackupParallelExecutor: Sendable {
                 var skippedMonthShortCircuit = false
                 if !workerState.paused, monthAlreadyFullyBackedUp(
                     monthAssetIDs: monthAssetIDs,
-                    monthStore: monthStore
+                    monthStore: monthStore,
+                    hiddenOnly: hiddenOnly
                 ) {
                     let progressState = await aggregator.recordMonthSkipped(count: monthAssetIDs.count)
                     if let transferState = Self.skippedMonthTransferState(
@@ -1104,7 +1111,7 @@ struct BackupParallelExecutor: Sendable {
 
                     let batchAssetsResult = PHAsset.fetchAssets(
                         withLocalIdentifiers: batchAssetIDs,
-                        options: PhotoLibraryService.makeAssetFetchOptions()
+                        options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: hiddenOnly)
                     )
                     var batchAssetsByLocalIdentifier: [String: PHAsset] = [:]
                     batchAssetsByLocalIdentifier.reserveCapacity(batchAssetsResult.count)
@@ -1148,6 +1155,10 @@ struct BackupParallelExecutor: Sendable {
                             ) {
                                 eventStream.emit(.transferState(transferState))
                             }
+                            await aggregator.reduceTotalForEmptyAsset()
+                            continue
+                        }
+                        guard !hiddenOnly || HiddenAssetSelectionPolicy.accepts(asset) else {
                             await aggregator.reduceTotalForEmptyAsset()
                             continue
                         }
@@ -1199,7 +1210,8 @@ struct BackupParallelExecutor: Sendable {
                                     profile: profile,
                                     assetPosition: dispatch.position,
                                     totalAssets: dispatch.total,
-                                    writeMode: writeMode
+                                    writeMode: writeMode,
+                                    hiddenOnly: hiddenOnly
                                 )
                                 processResult = try await assetProcessor.process(
                                     context: context,
@@ -1873,7 +1885,8 @@ struct BackupParallelExecutor: Sendable {
 
     func monthAlreadyFullyBackedUp(
         monthAssetIDs: [String],
-        monthStore: MonthManifestStore
+        monthStore: MonthManifestStore,
+        hiddenOnly: Bool = false
     ) -> Bool {
         guard !monthAssetIDs.isEmpty else { return true }
         guard !monthStore.assetsByFingerprint.isEmpty else { return false }
@@ -1885,12 +1898,13 @@ struct BackupParallelExecutor: Sendable {
 
         let fetchResult = PHAsset.fetchAssets(
             withLocalIdentifiers: monthAssetIDs,
-            options: PhotoLibraryService.makeAssetFetchOptions()
+            options: PhotoLibraryService.makeAssetFetchOptions(includeHiddenAssets: hiddenOnly)
         )
         guard fetchResult.count == monthAssetIDs.count else { return false }
 
         for index in 0 ..< fetchResult.count {
             let asset = fetchResult.object(at: index)
+            guard !hiddenOnly || HiddenAssetSelectionPolicy.accepts(asset) else { return false }
             guard let cache = cachedHashes[asset.localIdentifier] else { return false }
             let selected = BackupAssetResourcePlanner.orderedResourcesWithRoleSlot(from: PHAssetResource.assetResources(for: asset))
             guard let hashes = AssetProcessor.cachedRoleSlotHashes(asset: asset, selectedResources: selected, cachedLocalHash: cache),

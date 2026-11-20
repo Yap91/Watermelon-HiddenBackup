@@ -238,7 +238,7 @@ extension BrowserLinkRateLimitSetting: UserDefaultSettable {
     }
 
     static var defaultOption: BrowserLinkRateLimitSetting {
-        .standard
+        .unlimited
     }
 
     static func getHeader() -> String? {
