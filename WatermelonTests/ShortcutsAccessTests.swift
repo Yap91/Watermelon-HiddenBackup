@@ -94,6 +94,7 @@ final class ShortcutsAccessTests: XCTestCase {
         XCTAssertEqual(store.remainingTrialRuns, 5)
     }
 
+#if compiler(>=6.3)
     @MainActor
     func testDisabledBackupIntentStopsBeforeReadingParametersOrStartingBackgroundWork() async throws {
         guard #available(iOS 27.0, *) else { throw XCTSkip("Requires iOS 27 App Intents") }
@@ -112,6 +113,7 @@ final class ShortcutsAccessTests: XCTestCase {
             XCTAssertEqual(error as? ShortcutsAccessError, .disabled)
         }
     }
+#endif
 
     func testProUsersRunWithoutConsumingOrRequiringTrials() async throws {
         for _ in 0..<8 { try await store.run(isPro: true) {} }

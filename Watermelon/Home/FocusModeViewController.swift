@@ -2,11 +2,13 @@ import UIKit
 
 @MainActor
 final class FocusModeViewController: UIViewController {
+#if compiler(>=6.3)
     @available(iOS 27.1, *)
     override var preferredVerticalBarBehavior: UIVerticalBarBehavior { .disabled }
 
     @available(iOS 27.1, *)
     override var childForPreferredVerticalBarBehavior: UIViewController? { nil }
+#endif
 
     private let coordinator: HomeExecutionCoordinator
     private var stateObserverID: UUID?

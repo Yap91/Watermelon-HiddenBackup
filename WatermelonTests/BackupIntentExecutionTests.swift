@@ -423,6 +423,7 @@ final class BackupIntentExecutionTests: XCTestCase {
         ))
     }
 
+#if compiler(>=6.3)
     func testIntentDefaultsToRecentTwoMonths() throws {
         guard #available(iOS 27.0, *) else { throw XCTSkip("Requires iOS 27 App Intents") }
         let intent = RunBackupIntent()
@@ -434,6 +435,7 @@ final class BackupIntentExecutionTests: XCTestCase {
             XCTFail("Entire library must include every month")
         }
     }
+#endif
 
     func testProgressTitleNamesNodeAndSubtitleIgnoresDetailedMessages() async {
         let progress = Progress()

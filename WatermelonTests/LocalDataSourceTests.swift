@@ -166,6 +166,7 @@ final class LocalDataSourceTests: XCTestCase {
             XCTAssertEqual(entity?.id, "nodeDefault")
             XCTAssertEqual(entity?.title, String(localized: "dataSource.useNodeDefault"))
             XCTAssertNil(try entity?.resolve(albums: nil))
+#if compiler(>=6.3)
             let firstShortcut = RunBackupIntent()
             firstShortcut.dataSource = LocalDataSourceEntity(kind: .albums)
             firstShortcut.albums = [LocalAlbumEntity(travel), LocalAlbumEntity(favorites)]
@@ -176,6 +177,7 @@ final class LocalDataSourceTests: XCTestCase {
             try LocalDataSourceStore.shared.replaceAlbumSelection([])
             XCTAssertEqual(try firstShortcut.dataSource.resolve(albums: firstShortcut.albums)?.albums, [travel, favorites])
             XCTAssertEqual(try secondShortcut.dataSource.resolve(albums: secondShortcut.albums)?.albums, [favorites])
+#endif
             let suggestions = try await LocalDataSourceQuery().suggestedEntities()
             XCTAssertEqual(suggestions.map(\.id), ["nodeDefault", "all", "photos", "videos", "hidden", "albums"])
             try LocalDataSourceStore.shared.setDefault(saved)

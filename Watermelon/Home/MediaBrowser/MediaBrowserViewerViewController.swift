@@ -6,11 +6,13 @@ import UIKit
 // pages tear down (release image, stop Live playback) via cell reuse.
 @MainActor
 final class MediaBrowserViewerViewController: UIViewController {
+#if compiler(>=6.3)
     @available(iOS 27.1, *)
     override var preferredVerticalBarBehavior: UIVerticalBarBehavior { .disabled }
 
     @available(iOS 27.1, *)
     override var childForPreferredVerticalBarBehavior: UIViewController? { nil }
+#endif
 
     private let source: MediaBrowserSource
     private let session: MediaBrowserSession

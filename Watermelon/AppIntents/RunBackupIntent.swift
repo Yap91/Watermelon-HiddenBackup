@@ -2,6 +2,7 @@ import AppIntents
 import Foundation
 import os
 
+#if compiler(>=6.3)
 @available(iOS 27.0, *)
 enum IntentBackupScope: String, AppEnum {
     case recentTwoMonths
@@ -105,3 +106,4 @@ struct RunBackupIntent: LongRunningIntent, CancellableIntent {
         return .result()
     }
 }
+#endif

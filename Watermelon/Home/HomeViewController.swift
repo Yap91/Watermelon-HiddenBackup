@@ -61,11 +61,13 @@ enum ConnectionFailureAlertFactory {
 }
 
 final class HomeViewController: UIViewController {
+#if compiler(>=6.3)
     @available(iOS 27.1, *)
     override var preferredVerticalBarBehavior: UIVerticalBarBehavior { .disabled }
 
     @available(iOS 27.1, *)
     override var childForPreferredVerticalBarBehavior: UIViewController? { nil }
+#endif
 
     private static let privacyPolicyURLString = "https://watermelonbackup.com/privacy.html"
 
