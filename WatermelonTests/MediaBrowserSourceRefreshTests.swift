@@ -256,7 +256,7 @@ final class MediaBrowserSourceRefreshTests: XCTestCase {
         func setReadMutation(_ mutation: Mutation) { lock.withLock { self.mutation = mutation } }
 
         func loadSeed() -> HomeBrowserLocalSeed {
-            let mutation = lock.withLock { mutation }
+            let mutation = lock.withLock { self.mutation }
             switch mutation {
             case .commit:
                 let size = lock.withLock { size += 1; return size }
