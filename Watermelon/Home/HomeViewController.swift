@@ -1524,7 +1524,7 @@ final class HomeViewController: UIViewController {
                     )
                 }),
                 .init(mode: .remote, isAvailable: isConnected, makeSource: {
-                    guard let service = makeRemoteService() else { return makeLocalSource() }
+                    guard let service = makeRemoteService() else { return makeLocalSource(query: browserScope.localQuery) }
                     return RemoteMediaSource(service: service)
                 }),
             ]
