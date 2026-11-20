@@ -1147,7 +1147,8 @@ final class HomeExecutionCoordinator {
 
         let snapshot = ExecutionSettingsSnapshot.fromCurrentSettings(
             profile: dependencies.appSession.activeProfile,
-            monthGroupingTimeZone: dataAccess.localMonthGroupingTimeZone()
+            monthGroupingTimeZone: dataAccess.localMonthGroupingTimeZone(),
+            hiddenOnly: dataAccess.isHiddenOnly()
         )
         executionSettingsSnapshot = snapshot
         return snapshot
