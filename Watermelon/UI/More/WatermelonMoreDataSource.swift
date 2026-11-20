@@ -31,6 +31,8 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
         static let diagnosticLogs = "diagnosticLogs"
         static let pipProgress = "pipProgress"
         static let pipSound = "pipSound"
+        static let magicYapProfile = "magicYapProfile"
+        static let versionInfo = "versionInfo"
         static let testCrash = "testCrash"
     }
 
@@ -216,7 +218,23 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
             )))
         }
 
-        sections.append(contentsOf: [.contact, .appjun, .about])
+        sections.append(.custom(MoreCustomSection(
+            id: "magicYapAbout",
+            header: "关于",
+            items: [
+                MoreCustomItem(
+                    id: ItemID.magicYapProfile,
+                    title: "Magic Yap",
+                    showsDisclosureIndicator: false
+                ),
+                MoreCustomItem(
+                    id: ItemID.versionInfo,
+                    title: "版本信息",
+                    value: versionInformation,
+                    showsDisclosureIndicator: false
+                )
+            ]
+        )))
 
         var diagnosticsItems: [MoreCustomItem] = [
             MoreCustomItem(
@@ -325,11 +343,106 @@ class WatermelonMoreDataSource: MoreViewControllerDataSource {
 
 
     func moreViewController(_ controller: MoreViewController, cellFor item: MoreCustomItem) -> UITableViewCell? {
-        guard item.id == ItemID.pro else { return nil }
-        return MainActor.assumeIsolated {
-            WatermelonProEntryCell(isPro: ProStatus.isPro) { [weak controller] in
-                controller?.presentWatermelonPaywall()
+        MainActor.assumeIsolated {
+            switch item.id {
+            case ItemID.magicYapProfile:
+                return MagicYapProfileCell()
+            case ItemID.versionInfo:
+                return MagicYapVersionCell(value: item.value ?? "")
+            case ItemID.pro:
+                return WatermelonProEntryCell(isPro: ProStatus.isPro) { [weak controller] in
+                    controller?.presentWatermelonPaywall()
+                }
+            default:
+                return nil
             }
         }
+    }
+
+    private var versionInformation: String {
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        var details = ["基于西瓜开源修改"]
+        if let shortVersion, !shortVersion.isEmpty {
+            details.append(shortVersion)
+        }
+        if let build, !build.isEmpty, build != shortVersion {
+            details.append("(\(build))")
+        }
+        return details.joined(separator: " · ")
+    }
+}
+
+private final class MagicYapProfileCell: UITableViewCell {
+    init() {
+        super.init(style: .default, reuseIdentifier: nil)
+        overrideUserInterfaceStyle = .dark
+        backgroundColor = .secondarySystemGroupedBackground
+        accessoryType = .none
+        selectionStyle = .none
+
+        let avatarView = UIImageView(image: UIImage(named: "MagicYapAvatar"))
+        avatarView.translatesAutoresizingMaskIntoConstraints = false
+        avatarView.contentMode = .scaleAspectFill
+        avatarView.clipsToBounds = true
+        avatarView.layer.cornerRadius = 32
+        avatarView.isAccessibilityElement = false
+
+        let nameLabel = UILabel()
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        nameLabel.text = "Magic Yap"
+        nameLabel.textColor = .white
+        nameLabel.font = UIFontMetrics(forTextStyle: .title2).scaledFont(
+            for: .systemFont(ofSize: 23, weight: .semibold)
+        )
+        nameLabel.adjustsFontForContentSizeCategory = true
+
+        contentView.addSubview(avatarView)
+        contentView.addSubview(nameLabel)
+        NSLayoutConstraint.activate([
+            avatarView.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+            avatarView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            avatarView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
+            avatarView.widthAnchor.constraint(equalToConstant: 64),
+            avatarView.heightAnchor.constraint(equalToConstant: 64),
+            nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 20),
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.layoutMarginsGuide.trailingAnchor),
+            nameLabel.centerYAnchor.constraint(equalTo: avatarView.centerYAnchor)
+        ])
+
+        isAccessibilityElement = true
+        accessibilityLabel = "Magic Yap"
+        accessibilityTraits = .staticText
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+private final class MagicYapVersionCell: UITableViewCell {
+    init(value: String) {
+        super.init(style: .value1, reuseIdentifier: nil)
+        overrideUserInterfaceStyle = .dark
+        backgroundColor = .secondarySystemGroupedBackground
+        accessoryType = .none
+        selectionStyle = .none
+
+        var content = UIListContentConfiguration.valueCell()
+        content.text = "版本信息"
+        content.textProperties.color = .white
+        content.textProperties.font = .preferredFont(forTextStyle: .body)
+        content.secondaryText = value
+        content.secondaryTextProperties.color = .secondaryLabel
+        content.secondaryTextProperties.font = .preferredFont(forTextStyle: .subheadline)
+        contentConfiguration = content
+
+        isAccessibilityElement = true
+        accessibilityLabel = "版本信息，\(value)"
+        accessibilityTraits = .staticText
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }

@@ -69,7 +69,6 @@ final class HomeViewController: UIViewController {
     override var childForPreferredVerticalBarBehavior: UIViewController? { nil }
 #endif
 
-    private static let privacyPolicyURLString = "https://watermelonbackup.com/privacy.html"
 
     private enum HomeMode: Equatable {
         case backup
@@ -1147,18 +1146,11 @@ final class HomeViewController: UIViewController {
     private func makeMoreViewController() -> MoreViewController {
         let configuration = MoreViewControllerConfiguration(
             title: String(localized: "controller.more.title"),
-            email: "watermelon@zi.ci",
-            appStoreId: "6762260596",
-            privacyPolicyURL: Self.privacyPolicyURLString,
+            email: "",
+            appStoreId: "",
+            privacyPolicyURL: nil,
             specificationsConfig: SpecificationsConfiguration(
-                summaryItems: [
-                    .init(type: .name, value: SpecificationsViewController.getAppName() ?? ""),
-                    .init(type: .version, value: SpecificationsViewController.getAppVersion() ?? ""),
-                    .init(type: .manufacturer, value: "@App君"),
-                    .init(type: .publisher, value: "ZIZICICI LIMITED"),
-                    .init(type: .dateOfProduction, value: "2026/11/02"),
-                    .init(type: .license, value: "粤ICP备2025448771号-6A"),
-                ],
+                summaryItems: [],
                 thirdPartyLibraries: [
                     .init(name: "MoreKit", version: "2.1.0", urlString: "https://github.com/zizicici/MoreKit"),
                     .init(name: "AMSMB2", version: "main", urlString: "https://github.com/zizicici/AMSMB2"),
@@ -1171,8 +1163,8 @@ final class HomeViewController: UIViewController {
                 ]
             ),
             appShowcase: AppShowcaseConfiguration(
-                apps: [.lemon, .moontake, .coconut, .festivals, .pigeon, .one, .offDay, .tagDay, .pin, .campfire, .doufu],
-                displayCount: 3
+                apps: [],
+                displayCount: 0
             )
         )
 
